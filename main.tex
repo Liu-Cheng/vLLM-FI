@@ -42,8 +42,12 @@
 
 \geometry{margin=1in}
 
-\title{VLLMFI : A vLLM-based fault injection tool for large-scale models}
-\author{You}
+\title{vLLM-FI: A Fault Injection Framework for Reliability Evaluation of LLM Inference}
+\author{Jie~Ren, Zizhen~Liu, Songwei~Pei, Cheng~Liu, Huawei~Li, and Shangguang~Wang%
+\thanks{Jie Ren, Songwei Pei, and Shangguang Wang are with Beijing University of Posts and Telecommunications, Beijing, China.}%
+\thanks{Zizhen Liu and Huawei Li are with the Institute of Computing Technology, Chinese Academy of Sciences, Beijing, China.}%
+\thanks{Cheng Liu is with North China Electric Power University, China.}%
+\thanks{Corresponding authors: Songwei Pei and Cheng Liu.}}
 
 
 \begin{document}
@@ -51,7 +55,7 @@
 
 \begin{abstract}
 The rapid development of generative large language models (LLMs) is reshaping productivity and has led to their widespread deployment in important domains, including education, healthcare and code generation. As model sizes continue to grow, distributed inference architectures have become mainstream deployment solutions. However, the complex communication, scheduling and coordination mechanisms across multiple devices in these systems make them increasingly vulnerable to transient hardware faults. Even a minor bit flip can propagate and amplify across layers and devices, ultimately causing abnormal inference outputs, semantic breakdown or system crashes.
-To address this problem, this paper presents vLLMFi, a fine grained runtime fault injection tool built on the vLLM inference framework. While retaining the high throughput inference capability of vLLM, vLLMFi extends it with configurable fault injection interfaces that support multiple data types, fault models and distributed parallel scenarios. By customizing lightweight CUDA based bit flip operators, vLLMFi performs in place fault injection on the GPU, enabling fault simulation with low overhead and high precision. Using vLLMFi, we systematically evaluate how different fault models, downstream tasks, quantization strategies and model parallel configurations affect the reliability of LLMs. The proposed tool provides a new experimental platform and analytical perspective for studying the reliability of large scale distributed language models.
+To address this problem, this paper presents vLLM-FI, a fine grained runtime fault injection tool built on the vLLM inference framework. While retaining the high throughput inference capability of vLLM, vLLM-FI extends it with configurable fault injection interfaces that support multiple data types, fault models and distributed parallel scenarios. By customizing lightweight CUDA based bit flip operators, vLLM-FI performs in place fault injection on the GPU, enabling fault simulation with low overhead and high precision. Using vLLM-FI, we systematically evaluate how different fault models, downstream tasks, quantization strategies and model parallel configurations affect the reliability of LLMs. The proposed tool provides a new experimental platform and analytical perspective for studying the reliability of large scale distributed language models.
 \end{abstract}
 
 
@@ -64,28 +68,28 @@ This reliability concern has become increasingly important for generative large 
 
 Existing neural network reliability studies have established mature fault injection toolchains for convolutional neural networks (CNNs) and conventional deep neural networks (DNNs) \cite{mahmoud2021optimizing,wan2024mulberry,jiao2017assessment,liu2022special,xu2021reliability,reagen2018ares,mahmoud2020pytorchfi,huang2024mrfi}. However, these tools are not readily applicable to modern LLM inference systems. First, CNNs and DNNs often require only a single forward pass, whereas LLMs generate tokens through many iterative decoding steps. The runtime overhead and fault effects may therefore accumulate throughout autoregressive generation. Second, distributed LLM inference partitions model parameters and intermediate results across multiple devices or process ranks. Accurate fault injection must therefore account for data partitioning, parallel ranks, target devices, and execution stages. Finally, quantization, memory management, operator fusion, and optimized attention computation alter data representations and execution paths, further complicating precise fault injection. An effective tool for LLMs must therefore provide low overhead, precise target control, and compatibility with optimized distributed inference.
 
-To address these challenges, we present vLLMFi, a runtime fault injection tool integrated with the vLLM inference framework \cite{kwon2023efficient}. To the best of our knowledge, vLLMFi is the first fault injection tool specifically designed for vLLM. It embeds injection logic into the inference execution path and performs bit flips directly in GPU memory using lightweight CUDA operators. This design reduces tensor copies and data transfers between the host and device. vLLMFi supports fault injection into model parameters and runtime activations at the element and bit levels. Its target selection mechanism is aware of the parallel rank and execution stage, enabling precise injection under tensor parallelism and pipeline parallelism. In addition, vLLMFi provides a complete workflow that covers fault configuration, injection execution, model inference, outcome detection, and reliability analysis. A unified command line interface enables users to conduct fault injection experiments on downstream tasks with minimal manual configuration.
+To address these challenges, we present vLLM-FI, a runtime fault injection tool integrated with the vLLM inference framework \cite{kwon2023efficient}. To the best of our knowledge, vLLM-FI is the first fault injection tool specifically designed for vLLM. It embeds injection logic into the inference execution path and performs bit flips directly in GPU memory using lightweight CUDA operators. This design reduces tensor copies and data transfers between the host and device. vLLM-FI supports fault injection into model parameters and runtime activations at the element and bit levels. Its target selection mechanism is aware of the parallel rank and execution stage, enabling precise injection under tensor parallelism and pipeline parallelism. In addition, vLLM-FI provides a complete workflow that covers fault configuration, injection execution, model inference, outcome detection, and reliability analysis. A unified command line interface enables users to conduct fault injection experiments on downstream tasks with minimal manual configuration.
 
-We evaluate vLLMFi by validating the tool and analyzing LLM reliability. First, we validate its injection correctness and measure its latency overhead. Second, we use vLLMFi to investigate how fault models, downstream tasks, quantization strategies, and distributed parallel configurations affect LLM reliability.quantization and model parallelism influence fault manifestations. These results provide experimental evidence for selective protection, reliability optimization, and the design of deployment strategies for future LLM systems.
+We evaluate vLLM-FI by validating the tool and analyzing LLM reliability. First, we validate its injection correctness and measure its latency overhead. Second, we use vLLM-FI to investigate how fault models, downstream tasks, quantization strategies, and distributed parallel configurations affect LLM reliability.quantization and model parallelism influence fault manifestations. These results provide experimental evidence for selective protection, reliability optimization, and the design of deployment strategies for future LLM systems.
 
 
 The main contributions of this paper are summarized as follows:
 
 \begin{itemize}
-\item We propose vLLMFi and release it as open source. The tool integrates runtime fault injection with vLLM and supports fault simulation in model parameters and runtime activations.
+\item We propose vLLM-FI and release it as open source. The tool integrates runtime fault injection with vLLM and supports fault simulation in model parameters and runtime activations.
 
 \item We design lightweight CUDA operators that perform bit flips directly in GPU memory. 
 
-\item We develop a complete reliability evaluation workflow for distributed LLM inference. vLLMFi supports tensor parallelism, pipeline parallelism and quantization.
+\item We develop a complete reliability evaluation workflow for distributed LLM inference. vLLM-FI supports tensor parallelism, pipeline parallelism and quantization.
 
-\item We validate the injection correctness and runtime efficiency of vLLMFi. We also analyze how fault models, downstream tasks, quantization strategies, and parallel configurations affect LLM reliability.
+\item We validate the injection correctness and runtime efficiency of vLLM-FI. We also analyze how fault models, downstream tasks, quantization strategies, and parallel configurations affect LLM reliability.
 
 \end{itemize}
 
 
 \section{Related Work}
 
-This section reviews two lines of research directly related to vLLMFi: fault injection tools and neural network reliability analysis. The former concerns how hardware faults can be simulated efficiently and controllably. The latter uses fault injection results to characterize model vulnerability and fault propagation. We focus on the applicability of existing approaches to LLM inference, especially under autoregressive decoding, quantized execution, and distributed deployment.
+This section reviews two lines of research directly related to vLLM-FI: fault injection tools and neural network reliability analysis. The former concerns how hardware faults can be simulated efficiently and controllably. The latter uses fault injection results to characterize model vulnerability and fault propagation. We focus on the applicability of existing approaches to LLM inference, especially under autoregressive decoding, quantized execution, and distributed deployment.
 
 \subsection{Fault Injection Tools}
 
@@ -104,12 +108,12 @@ Fault injection tools can be broadly divided into hardware level and model level
 Model level methods map hardware faults to perturbations of model parameters, activations, or intermediate tensors. This abstraction provides a practical balance between experimental efficiency and result interpretability. Ares \cite{reagen2018ares} showed that model level injection can reproduce statistical behaviors consistent with hardware faults. PyTorchFI \cite{mahmoud2020pytorchfi} subsequently established a widely used runtime approach based on PyTorch hooks. Sun et al. \cite{sun2025demystifying,sun2025ft2} extended this approach to LLMs by modifying model weights and intermediate layer outputs. ReaLM \cite{xie2025realm} incorporates the mixed precision computation flow of SmoothQuant \cite{xiao2023smoothquant} and injects errors into INT32 accumulation results.
 
 Despite this progress, existing model level tools mainly depend on standard PyTorch or Hugging Face Transformers execution paths. Their implementations do not natively locate injection targets according to device or process ranks or coordinate injections across distributed execution stages. Support for quantized inference is also tied to specific numerical representations and computation flows. Adapting these tools to other quantization formats, parallel configurations, or inference backends therefore requires separate implementation changes. These limitations leave a gap between existing fault injection tools and modern high throughput distributed LLM deployment.
-Table~\ref{tab:comparison} compares vLLMFi with representative
+Table~\ref{tab:comparison} compares vLLM-FI with representative
 model-level fault injection approaches.
 
 \begin{table}[htbp]
 \centering
-\caption{Comparison of vLLMFi with representative model-level fault injection approaches.}
+\caption{Comparison of vLLM-FI with representative model-level fault injection approaches.}
 \label{tab:comparison}
 \renewcommand{\arraystretch}{1.25}
 \setlength{\tabcolsep}{3pt}
@@ -118,7 +122,7 @@ model-level fault injection approaches.
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 \textbf{Feature}
-& \textbf{vLLMFi}
+& \textbf{vLLM-FI}
 & \textbf{ReaLM} \cite{xie2025realm}
 & \textbf{Sun et al.} \cite{sun2025demystifying}
 & \textbf{mrfi} \cite{huang2024mrfi} \\
@@ -193,7 +197,7 @@ Recent work has directly investigated the reliability of language models. Agarwa
 
 These studies show that LLM fault behavior varies with the downstream task, model component, numerical representation, and inference setting. Their evaluation scopes remain limited in model scale, fault coverage, and deployment environment. Agarwal et al. evaluated models containing between 38.9 million and 222.9 million parameters. They also used only five or ten inputs for each benchmark. The applicability of their conclusions to modern large scale autoregressive LLMs therefore requires further validation.Although Sun et al. compared multiple fault types across downstream tasks, each inference run contained only one fault event and their quantization study compared the GPTQ 4-bit and 8-bit variants of Qwen2.5-7B with its BF16 version.
 
-%In summary, prior work has demonstrated that fault injection is an effective method for analyzing neural network reliability and has begun to reveal the vulnerability of Transformer and LLM components. However, existing studies still lack a fault injection tool that is deeply integrated with a high performance LLM inference framework and can support distributed parallelism and multiple deployment optimization mechanisms. vLLMFi is designed to fill this gap. Built on the vLLM inference engine, it preserves the high throughput inference pipeline while supporting fine grained and configurable runtime fault injection, thereby providing experimental support for reliability evaluation of large language models in realistic deployment environments.
+%In summary, prior work has demonstrated that fault injection is an effective method for analyzing neural network reliability and has begun to reveal the vulnerability of Transformer and LLM components. However, existing studies still lack a fault injection tool that is deeply integrated with a high performance LLM inference framework and can support distributed parallelism and multiple deployment optimization mechanisms. vLLM-FI is designed to fill this gap. Built on the vLLM inference engine, it preserves the high throughput inference pipeline while supporting fine grained and configurable runtime fault injection, thereby providing experimental support for reliability evaluation of large language models in realistic deployment environments.
 
 
 % English manuscript draft for Sections 3 and 4.
@@ -207,34 +211,34 @@ These studies show that LLM fault behavior varies with the downstream task, mode
 %    events. The framework supports both modes; Section 5 must state the mode.
 % 2. Confirm that distributed and single-GPU communication experiments use
 %    the same target modules.
-\section{vLLMFi Framework}
+\section{vLLM-FI Framework}
 \label{sec:framework}
 
-This section presents the design and implementation of vLLMFi. It focuses on how the tool performs configurable fault injection on the native vLLM execution path. We first describe the constraints imposed by the multi-process runtime and the overall architecture. The remaining subsections present fault models, cross-process configuration propagation, runtime target selection, GPU-resident bit flipping, and automated reliability evaluation.
+This section presents the design and implementation of vLLM-FI. It focuses on how the tool performs configurable fault injection on the native vLLM execution path. We first describe the constraints imposed by the multi-process runtime and the overall architecture. The remaining subsections present fault models, cross-process configuration propagation, runtime target selection, GPU-resident bit flipping, and automated reliability evaluation.
 
 \subsection{Design Goals and System Architecture}
 \label{subsec:architecture}
 
-vLLM improves inference throughput and GPU memory utilization through continuous batching, PagedAttention-based KV-cache management, optimized computation kernels, and distributed parallel execution \cite{kwon2023efficient}. However, the runtime architecture supporting these optimizations complicates conventional hook-based fault injection. Unlike a typical PyTorch program, which stores the model object in a single process, vLLM executes models in Worker processes launched by a scheduling process. Consequently, model instances and layer objects reside inside the Workers and are not directly accessible from the entry process. External forward hooks therefore cannot reliably locate or modify a target layer. Distributed execution further partitions parameters and intermediate results across ranks. vLLMFi must therefore propagate fault configurations across process boundaries and perform injection inside the appropriate Worker at the correct rank and runtime location.
+vLLM improves inference throughput and GPU memory utilization through continuous batching, PagedAttention-based KV-cache management, optimized computation kernels, and distributed parallel execution \cite{kwon2023efficient}. However, the runtime architecture supporting these optimizations complicates conventional hook-based fault injection. Unlike a typical PyTorch program, which stores the model object in a single process, vLLM executes models in Worker processes launched by a scheduling process. Consequently, model instances and layer objects reside inside the Workers and are not directly accessible from the entry process. External forward hooks therefore cannot reliably locate or modify a target layer. Distributed execution further partitions parameters and intermediate results across ranks. vLLM-FI must therefore propagate fault configurations across process boundaries and perform injection inside the appropriate Worker at the correct rank and runtime location.
 
-vLLMFi addresses these constraints through a configuration-driven injection path integrated into the native vLLM runtime. For each experiment, the system receives a set of inference requests, a vLLM execution configuration, and a \textit{Fault Config}. The vLLM execution configuration specifies the model, quantization method, parallel configuration, and inference parameters, whereas the \textit{Fault Config} specifies the fault type, injection target, and injection strength. During execution, the fault configuration is propagated to the Workers, where vLLMFi applies controlled perturbations to selected model weights, operator outputs, or communication buffers. The resulting inference outputs retain the format expected by downstream task evaluators.
+vLLM-FI addresses these constraints through a configuration-driven injection path integrated into the native vLLM runtime. For each experiment, the system receives a set of inference requests, a vLLM execution configuration, and a \textit{Fault Config}. The vLLM execution configuration specifies the model, quantization method, parallel configuration, and inference parameters, whereas the \textit{Fault Config} specifies the fault type, injection target, and injection strength. During execution, the fault configuration is propagated to the Workers, where vLLM-FI applies controlled perturbations to selected model weights, operator outputs, or communication buffers. The resulting inference outputs retain the format expected by downstream task evaluators.
 
-Three goals guide this architecture: configuration simplicity, efficient injection, and precise runtime targeting. First, vLLMFi manages the \textit{Fault Config} together with the native vLLM execution parameters and automatically handles its propagation across processes. Second, it modifies GPU-resident target tensors in place, avoiding CPU copies and host--device transfers introduced solely by fault injection. Third, it resolves injection targets using the runtime representations and execution locations employed by vLLM, including quantized tensors, fused operators, and rank-local data. These extensions do not alter model partitioning, Worker launch, device placement, or scheduling, which remain under the control of vLLM.
+Three goals guide this architecture: configuration simplicity, efficient injection, and precise runtime targeting. First, vLLM-FI manages the \textit{Fault Config} together with the native vLLM execution parameters and automatically handles its propagation across processes. Second, it modifies GPU-resident target tensors in place, avoiding CPU copies and host--device transfers introduced solely by fault injection. Third, it resolves injection targets using the runtime representations and execution locations employed by vLLM, including quantized tensors, fused operators, and rank-local data. These extensions do not alter model partitioning, Worker launch, device placement, or scheduling, which remain under the control of vLLM.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.82\textwidth]{vLLMFI.pdf}
-    \caption{\textbf{Overview of the vLLMFi architecture and execution workflow.}
+    \caption{\textbf{Overview of the vLLM-FI architecture and execution workflow.}
     vLLM schedules inference requests from the evaluation dataset, while Fault Config is integrated with the native configuration and propagated to the Workers. Worker-side injectors perturb selected GPU-resident tensors during inference, and \texttt{lm-evaluation} evaluates the resulting outputs.}
     \label{fig:vllmfi_architecture}
 \end{figure*}
 
-Figure~\ref{fig:vllmfi_architecture} illustrates the configuration-driven architecture and execution workflow of vLLMFi. The evaluation dataset and Fault Config are provided as system inputs, while vLLM schedules the inference requests generated from the dataset. Fault Config is integrated with the native vLLM execution configuration to form a unified runtime configuration, which is then propagated to the Workers through the Executor. During model inference, each Worker activates the appropriate fault injector according to the fault type, injection target, and injection strength specified in Fault Config. The fault-affected model outputs are subsequently returned to lm-evaluation, which evaluates the injection results using the task-specific metrics associated with the dataset.
+Figure~\ref{fig:vllmfi_architecture} illustrates the configuration-driven architecture and execution workflow of vLLM-FI. The evaluation dataset and Fault Config are provided as system inputs, while vLLM schedules the inference requests generated from the dataset. Fault Config is integrated with the native vLLM execution configuration to form a unified runtime configuration, which is then propagated to the Workers through the Executor. During model inference, each Worker activates the appropriate fault injector according to the fault type, injection target, and injection strength specified in Fault Config. The fault-affected model outputs are subsequently returned to lm-evaluation, which evaluates the injection results using the task-specific metrics associated with the dataset.
 
 \subsection{Fault Models and Injection-Strength Modeling}
 \label{subsec:fault_models}
 
-vLLMFi defines memory, compute, and communication faults on model weights, operator results, and communication buffers. The framework supports fixed-count and bit error rate modes.Fixed-count mode specifies the number of fault events. BER mode derives the Poisson parameter $\lambda$ from the exposure of the target object. The following subsections define the exposure and event count for each fault model.
+vLLM-FI defines memory, compute, and communication faults on model weights, operator results, and communication buffers. The framework supports fixed-count and bit error rate modes.Fixed-count mode specifies the number of fault events. BER mode derives the Poisson parameter $\lambda$ from the exposure of the target object. The following subsections define the exposure and event count for each fault model.
 
 \begin{figure*}[t]
     \centering
@@ -243,13 +247,13 @@ vLLMFi defines memory, compute, and communication faults on model weights, opera
     \subfloat[Compute fault in an operator result.\label{fig:fault_compute}]{\includegraphics[width=0.30\textwidth]{compute_error.drawio.pdf}}
     \hfill
     \subfloat[Communication fault before a collective.\label{fig:fault_comm}]{\includegraphics[width=0.30\textwidth]{communication_error_v2.drawio.pdf}}
-    \caption{Model-visible fault abstractions in vLLMFi. A weight perturbation persists after loading. A compute perturbation changes an intermediate result. A communication perturbation is applied to a local buffer before collective communication and may propagate through data exchange or aggregation.}
+    \caption{Model-visible fault abstractions in vLLM-FI. A weight perturbation persists after loading. A compute perturbation changes an intermediate result. A communication perturbation is applied to a local buffer before collective communication and may propagate through data exchange or aggregation.}
     \label{fig:three_fault_models}
 \end{figure*}
 
 \subsubsection{Memory Faults}
 
-Memory faults model weight corruption during storage or loading. Error-correcting code can detect or correct many single-bit errors. Uncorrectable multi-bit errors may still cause silent data corruption \cite{hsiao2023silent,papadimitriou2021demystifying,jiao2025large}. vLLMFi injects random double-bit flips while weights enter the GPU execution path. A modified weight remains corrupted during subsequent forward computations and autoregressive decoding.
+Memory faults model weight corruption during storage or loading. Error-correcting code can detect or correct many single-bit errors. Uncorrectable multi-bit errors may still cause silent data corruption \cite{hsiao2023silent,papadimitriou2021demystifying,jiao2025large}. vLLM-FI injects random double-bit flips while weights enter the GPU execution path. A modified weight remains corrupted during subsequent forward computations and autoregressive decoding.
 
 For a weight tensor $\mathbf{W}$ with $|\mathbf{W}|$ elements and a storage width of $b$ bits per element, let $\rho_{\mathrm{mem}}$ be the fault-event rate per stored bit. The fault count is
 \begin{equation}
@@ -262,7 +266,7 @@ For a weight tensor $\mathbf{W}$ with $|\mathbf{W}|$ elements and a storage widt
 
 \subsubsection{Compute Faults}
 
-Compute faults model the effect of transient errors in arithmetic units on intermediate results \cite{ashraf2015understanding}. Following prior LLM reliability studies \cite{sun2025demystifying,sun2025ft2,xie2025realm}, vLLMFi maps them to bit perturbations in GEMM and related matrix-computation outputs.
+Compute faults model the effect of transient errors in arithmetic units on intermediate results \cite{ashraf2015understanding}. Following prior LLM reliability studies \cite{sun2025demystifying,sun2025ft2,xie2025realm}, vLLM-FI maps them to bit perturbations in GEMM and related matrix-computation outputs.
 
 Compute exposure is defined by the multiply--accumulate (MAC) workload represented by the target operators. Let $\mathcal{C}_{\mathrm{total}}$ be the estimated MAC count and $b_{\mathrm{inj}}$ the data width at the injection point. The bit-level compute exposure and expected event count are
 \begin{equation}
@@ -311,14 +315,14 @@ $\mathcal{C}_{\mathrm{total}} \leftarrow \mathcal{C}_{\mathrm{proj}}+\mathcal{C}
 
 \subsubsection{Communication Faults}
 
-Communication faults model errors during data exchange in multi-device inference. vLLMFi flips bits in a local communication buffer before a collective call. Corrupted data then participates in operations such as All-Reduce and may propagate to other ranks.
+Communication faults model errors during data exchange in multi-device inference. vLLM-FI flips bits in a local communication buffer before a collective call. Corrupted data then participates in operations such as All-Reduce and may propagate to other ranks.
 
 Communication exposure is derived from the transferred data volume. Consider a Ring All-Reduce with tensor-parallel size $P$ and a communication tensor containing $N_{\mathrm{elem}}$ elements. Its Reduce-Scatter and All-Gather phases produce the following per-rank element volume:
 \begin{equation}
     V_{\mathrm{comm}}=\frac{2(P-1)}{P}N_{\mathrm{elem}}.
     \label{eq:comm_volume}
 \end{equation}
-For a communication width of $b$ bits and a target rate $\rho_{\mathrm{comm}}$, vLLMFi samples
+For a communication width of $b$ bits and a target rate $\rho_{\mathrm{comm}}$, vLLM-FI samples
 \begin{equation}
     \lambda_{\mathrm{comm}}=V_{\mathrm{comm}}b\rho_{\mathrm{comm}},
     \qquad
@@ -331,9 +335,9 @@ This model separates communication-path exposure from an equal-sized local tenso
 \subsection{Configuration-Driven Runtime Injection}
 \label{subsec:runtime_injection}
 
-Fault Config extends the native vLLM execution configuration with controlled fault-injection metadata. It records the fault type, fault mode, target rank, injection strength and random seed. The evaluation dataset and Fault Config are provided to vLLMFi as system inputs. vLLM schedules the inference requests derived from the dataset, while vLLMFi integrates Fault Config with the native execution settings to form a unified runtime configuration. The Executor then propagates this configuration to the Workers.
+Fault Config extends the native vLLM execution configuration with controlled fault-injection metadata. It records the fault type, fault mode, target rank, injection strength and random seed. The evaluation dataset and Fault Config are provided to vLLM-FI as system inputs. vLLM schedules the inference requests derived from the dataset, while vLLM-FI integrates Fault Config with the native execution settings to form a unified runtime configuration. The Executor then propagates this configuration to the Workers.
 
-Within each Worker, vLLMFi registers candidate injection sites along the weight-loading, operator-computation, and collective-communication paths. At each candidate site, the Worker checks the current module, execution stage, and local rank against Fault Config. When all conditions match, the Worker passes the target tensor and injection parameters to the custom CUDA bit-flip operator, which modifies the selected GPU-resident tensor in place.
+Within each Worker, vLLM-FI registers candidate injection sites along the weight-loading, operator-computation, and collective-communication paths. At each candidate site, the Worker checks the current module, execution stage, and local rank against Fault Config. When all conditions match, the Worker passes the target tensor and injection parameters to the custom CUDA bit-flip operator, which modifies the selected GPU-resident tensor in place.
 
 Rank selection supports a single rank, a list of ranks, or all ranks. Each Worker compares its local rank with the configured target set. Single-rank mode enables injection only in the selected Worker, while multi-rank mode enables injection in the listed Workers. All-rank mode permits injection in every Worker that satisfies the configured module and execution-stage conditions.
 
@@ -343,17 +347,17 @@ For communication faults, the injection scope covers all inter-GPU communication
 \subsection{GPU-Resident In-Place Bit-Flip Operator}
 \label{subsec:cuda_operator}
 
-vLLMFi uses a custom CUDA operator to modify selected GPU-resident tensors in place. The operator receives a tensor pointer and the injection parameters, and directly modifies the underlying binary storage without creating a CPU copy. 
+vLLM-FI uses a custom CUDA operator to modify selected GPU-resident tensors in place. The operator receives a tensor pointer and the injection parameters, and directly modifies the underlying binary storage without creating a CPU copy.
 
 For each fault event, the operator samples a tensor element and selects one or two distinct bit positions permitted by the configured policy. It constructs an XOR mask from the selected positions and applies the mask to the stored binary representation of the element. The eligible bit positions are determined by the tensor data type and the bit-selection policy. Full-width mode supports FP64, FP32, FP16, BF16, INT8, UINT8, INT16, INT32, INT64 , FP8 E5M2 and FP8 E4M3FN. Field-specific mode restricts faults in FP16, BF16, and FP8 values to the sign, exponent, or mantissa fields.
 
-Updates are performed using atomic XOR operations. For 32-bit and 64-bit storage words, the operator applies the mask directly to the corresponding word. Since CUDA does not provide native atomic XOR operations for 8-bit or 16-bit values, vLLMFi maps each target value to its enclosing aligned 32-bit word. It then shifts the mask according to the byte or half-word offset and performs a 32-bit atomic XOR operation. This procedure preserves the remaining bits in the storage word and prevents lost updates when multiple threads concurrently access the same word.
+Updates are performed using atomic XOR operations. For 32-bit and 64-bit storage words, the operator applies the mask directly to the corresponding word. Since CUDA does not provide native atomic XOR operations for 8-bit or 16-bit values, vLLM-FI maps each target value to its enclosing aligned 32-bit word. It then shifts the mask according to the byte or half-word offset and performs a 32-bit atomic XOR operation. This procedure preserves the remaining bits in the storage word and prevents lost updates when multiple threads concurrently access the same word.
 The kernel assigns scheduled fault events to CUDA threads. The element and bit positions for each event are determined by a base random seed and the thread index. The kernel executes on the caller-provided CUDA stream without introducing explicit device-wide synchronization. Identical configurations, random seeds, and execution conditions reproduce the same injection positions. Section 5 evaluates the end-to-end runtime overhead.
 
 \subsection{Automated End-to-End Reliability Evaluation}
 \label{subsec:evaluation_loop}
 
-Fault injection produces perturbed outputs. A complete reliability study must also load tasks, construct inputs, run inference, score outputs, and aggregate results. Separate scripts for these steps increase the effort required to add a task or fault configuration. vLLMFi integrates with \texttt{lm-evaluation-harness} to expose one evaluation workflow.
+Fault injection produces perturbed outputs. A complete reliability study must also load tasks, construct inputs, run inference, score outputs, and aggregate results. Separate scripts for these steps increase the effort required to add a task or fault configuration. vLLM-FI integrates with \texttt{lm-evaluation-harness} to expose one evaluation workflow.
 
 Users select the model, downstream task, vLLM settings, and Fault Config through a common command-line entry. The system initializes the model, propagates the fault configuration, triggers runtime injection, collects outputs, and invokes the task evaluator. Changing the fault model, target, or task requires configuration changes rather than new model-loading, trigger, or scoring code.
 
@@ -362,7 +366,7 @@ The task evaluator first produces the native benchmark metric. The result-proces
 \section{Experimental Setup}
 \label{sec:experimental_setup}
 
-This section reports the common setup used to validate vLLMFi and evaluate LLM inference reliability.
+This section reports the common setup used to validate vLLM-FI and evaluate LLM inference reliability.
 
 \subsection{Experimental Platform and Workloads}
 \label{subsec:platform_workloads}
@@ -414,14 +418,14 @@ Section~5 presents tool correctness and runtime cost, memory and compute faults 
 
 \section{Experimental Results}
 
-This section evaluates the effectiveness of vLLMFi and the reliability of large language models under different fault conditions. We first calibrate the fault injection behavior of vLLMFi against MRFI. We then analyze the effects of compute and memory faults across downstream tasks and evaluate how weight-only quantization affects sensitivity to memory faults. Finally, we examine reliability differences in distributed inference, including those associated with communication strategies and model-parallel configurations. Unless otherwise specified, the fault injection scope covers all model layers. For device-specific injection in model-parallel experiments, the scope covers all model layers or layer partitions assigned to the selected GPU.
+This section evaluates the effectiveness of vLLM-FI and the reliability of large language models under different fault conditions. We first calibrate the fault injection behavior of vLLM-FI against MRFI. We then analyze the effects of compute and memory faults across downstream tasks and evaluate how weight-only quantization affects sensitivity to memory faults. Finally, we examine reliability differences in distributed inference, including those associated with communication strategies and model-parallel configurations. Unless otherwise specified, the fault injection scope covers all model layers. For device-specific injection in model-parallel experiments, the scope covers all model layers or layer partitions assigned to the selected GPU.
 
 \subsection{Tool Validation and Calibration}
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{fig_exp1_consistency_analysis.pdf}
-    \caption{\textbf{Output-level consistency between MRFI and vLLMFi.}
-vLLMFi closely matches MRFI across different bit flip error rates, showing highly consistent FI correct rates.}
+    \caption{\textbf{Output-level consistency between MRFI and vLLM-FI.}
+vLLM-FI closely matches MRFI across different bit flip error rates, showing highly consistent FI correct rates.}
     \label{fig:exp1_consistency_analysis}
 \end{figure}
 
@@ -429,33 +433,33 @@ vLLMFi closely matches MRFI across different bit flip error rates, showing highl
     \centering
     \includegraphics[width=\columnwidth]{fig_exp1_frob_distribution.pdf}
     \caption{\textbf{Tensor-level calibration against MRFI.}
-    vLLMFi produces activation perturbation distributions that closely match MRFI under different bit flip error rates.}
+    vLLM-FI produces activation perturbation distributions that closely match MRFI under different bit flip error rates.}
     \label{fig:exp1_frob_distribution}
 \end{figure}
 
 \textbf{Calibration Protocol.}
-We calibrated vLLMFi against MRFI at both the output and tensor levels. For each calibration setting, we performed five repetitions of 1,000 fault-injection trials on the same input sample. In both tools, all faults targeted the \texttt{down\_proj} module of the eighth model layer. For output-level analysis, we recorded whether the model produced the correct final output. For tensor-level analysis, we recorded the target-layer activations before and after fault injection.
+We calibrated vLLM-FI against MRFI at both the output and tensor levels. For each calibration setting, we performed five repetitions of 1,000 fault-injection trials on the same input sample. In both tools, all faults targeted the \texttt{down\_proj} module of the eighth model layer. For output-level analysis, we recorded whether the model produced the correct final output. For tensor-level analysis, we recorded the target-layer activations before and after fault injection.
 
 \textbf{Output-Level Calibration.}
-Figure~\ref{fig:exp1_consistency_analysis} compares the output-level fault effects produced by MRFI and vLLMFi under different bit-flip error rates. The fault-injection (FI) correct rate is defined as the proportion of trials in which the model still produces the correct output after fault injection. Across all tested error rates, vLLMFi closely matched MRFI, with a mean correlation coefficient of $r=0.999$ and a maximum absolute difference of only 0.62 percentage points. These results indicate that vLLMFi reproduces the output-level fault effects of MRFI while operating on the native vLLM inference path.
+Figure~\ref{fig:exp1_consistency_analysis} compares the output-level fault effects produced by MRFI and vLLM-FI under different bit-flip error rates. The fault-injection (FI) correct rate is defined as the proportion of trials in which the model still produces the correct output after fault injection. Across all tested error rates, vLLM-FI closely matched MRFI, with a mean correlation coefficient of $r=0.999$ and a maximum absolute difference of only 0.62 percentage points. These results indicate that vLLM-FI reproduces the output-level fault effects of MRFI while operating on the native vLLM inference path.
 
 \textbf{Tensor-Level Calibration.}
-Agreement in final-output correctness does not necessarily imply that the two tools produce similar intermediate perturbations. We therefore compared the changes in the target-layer activation matrices before and after fault injection. Figure~\ref{fig:exp1_frob_distribution} presents the distributions of the Frobenius norms of the activation changes produced by MRFI and vLLMFi. Panels (a) and (b) show the kernel density estimate (KDE) and empirical cumulative distribution function (ECDF) curves at a bit-flip error rate of $1\times10^{-6}$, whereas panels (c) and (d) show the corresponding results at $5\times10^{-6}$. At both error rates, the two tools produced highly overlapping distributions. The low Kolmogorov--Smirnov (KS) statistics further indicate close agreement between the distributions of their activation-change magnitudes.
+Agreement in final-output correctness does not necessarily imply that the two tools produce similar intermediate perturbations. We therefore compared the changes in the target-layer activation matrices before and after fault injection. Figure~\ref{fig:exp1_frob_distribution} presents the distributions of the Frobenius norms of the activation changes produced by MRFI and vLLM-FI. Panels (a) and (b) show the kernel density estimate (KDE) and empirical cumulative distribution function (ECDF) curves at a bit-flip error rate of $1\times10^{-6}$, whereas panels (c) and (d) show the corresponding results at $5\times10^{-6}$. At both error rates, the two tools produced highly overlapping distributions. The low Kolmogorov--Smirnov (KS) statistics further indicate close agreement between the distributions of their activation-change magnitudes.
 
-Taken together, the output-level and tensor-level analyses show that, under the tested settings, vLLMFi closely matches MRFI in both final-output correctness and the distribution of activation-change magnitudes. This agreement supports the use of vLLMFi in the subsequent large-scale experiments.
+Taken together, the output-level and tensor-level analyses show that, under the tested settings, vLLM-FI closely matches MRFI in both final-output correctness and the distribution of activation-change magnitudes. This agreement supports the use of vLLM-FI in the subsequent large-scale experiments.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\columnwidth]{exp1_mrfi_vllmfi_runtime_comparison.pdf}
-\caption{\textbf{End-to-end runtime of MRFI and vLLMFi.}
-Bars show the mean runtime per run, with error bars denoting the standard deviation. The vLLMFi runtime is divided into inference time and other runtime overhead.}
+\caption{\textbf{End-to-end runtime of MRFI and vLLM-FI.}
+Bars show the mean runtime per run, with error bars denoting the standard deviation. The vLLM-FI runtime is divided into inference time and other runtime overhead.}
     \label{fig:mrfi_vllmfi_runtime}
 \end{figure}
 
 \textbf{End-to-End Runtime Comparison.}
-We further compare the execution time of MRFI and vLLMFi when faults are injected into all \texttt{down\_proj} modules in the model. The evaluated bit-flip error rates range from $10^{-7}$ to $10^{-4}$. Figure~\ref{fig:mrfi_vllmfi_runtime} reports the mean wall-clock time per run, with error bars indicating the sample standard deviation.
+We further compare the execution time of MRFI and vLLM-FI when faults are injected into all \texttt{down\_proj} modules in the model. The evaluated bit-flip error rates range from $10^{-7}$ to $10^{-4}$. Figure~\ref{fig:mrfi_vllmfi_runtime} reports the mean wall-clock time per run, with error bars indicating the sample standard deviation.
 
-Across all tested error rates, vLLMFi requires between $7.66$ and $12.82$ minutes per run, compared with $18.48$ to $23.98$ minutes for MRFI. This corresponds to a wall-clock time reduction of $44.8\%$--$58.6\%$, or a speedup of $1.81\times$--$2.41\times$. Model inference accounts for $88.3\%$--$93.2\%$ of the total vLLMFi runtime, while the remaining runtime overhead remains nearly constant at approximately $52.1$--$53.8$ seconds. These results demonstrate that vLLMFi reduces the end-to-end cost of repeated fault-injection experiments under the evaluated all-\texttt{down\_proj} injection workload.
+Across all tested error rates, vLLM-FI requires between $7.66$ and $12.82$ minutes per run, compared with $18.48$ to $23.98$ minutes for MRFI. This corresponds to a wall-clock time reduction of $44.8\%$--$58.6\%$, or a speedup of $1.81\times$--$2.41\times$. Model inference accounts for $88.3\%$--$93.2\%$ of the total vLLM-FI runtime, while the remaining runtime overhead remains nearly constant at approximately $52.1$--$53.8$ seconds. These results demonstrate that vLLM-FI reduces the end-to-end cost of repeated fault-injection experiments under the evaluated all-\texttt{down\_proj} injection workload.
 
 
 \begin{figure}[t]
@@ -467,11 +471,11 @@ Across all tested error rates, vLLMFi requires between $7.66$ and $12.82$ minute
 \end{figure}
 
 \textbf{Controlled Comparison of Injection Backends.}
-To isolate the efficiency of the injection implementation from differences between inference frameworks, we ported the fault-injection logic of MRFI into the vLLMFi runtime. We evaluate LLaMA-3.1-8B on GSM8K and inject compute faults into the outputs of all \texttt{down\_proj} modules. A fault-free execution is included as the baseline, and the evaluated compute-error rates range from $10^{-10}$ to $10^{-6}$.
+To isolate the efficiency of the injection implementation from differences between inference frameworks, we ported the fault-injection logic of MRFI into the vLLM-FI runtime. We evaluate LLaMA-3.1-8B on GSM8K and inject compute faults into the outputs of all \texttt{down\_proj} modules. A fault-free execution is included as the baseline, and the evaluated compute-error rates range from $10^{-10}$ to $10^{-6}$.
 
 Figure~\ref{fig:controlled_injection_runtime} shows that the runtime advantage of the CUDA backend increases with the error rate. At $10^{-10}$, the MRFI-style and CUDA backends require $623.3$ and $605.2$ seconds per run, respectively, corresponding to a modest reduction of $2.9\%$. As the error rate increases from $10^{-9}$ to $10^{-6}$, the runtime of the MRFI-style backend increases from $743.3$ to $3577.9$ seconds. In contrast, the CUDA backend remains between $675.6$ and $689.3$ seconds. At $10^{-6}$, the CUDA backend reduces wall-clock time by $80.8\%$ and achieves a $5.22\times$ speedup over the MRFI-style backend.
 
-Taken together, the two runtime comparisons show that vLLMFi reduces the end-to-end cost of repeated fault-injection experiments relative to MRFI and scales more efficiently as the fault rate increases. Under the evaluated workload targeting all \texttt{down\_proj} layers, the CUDA backend maintains comparatively stable runtime across the tested error rates, whereas the MRFI-style backend becomes substantially more expensive, yielding a maximum speedup of $5.22\times$ at $10^{-6}$. These results support the use of vLLMFi for large-scale fault-injection campaigns.
+Taken together, the two runtime comparisons show that vLLM-FI reduces the end-to-end cost of repeated fault-injection experiments relative to MRFI and scales more efficiently as the fault rate increases. Under the evaluated workload targeting all \texttt{down\_proj} layers, the CUDA backend maintains comparatively stable runtime across the tested error rates, whereas the MRFI-style backend becomes substantially more expensive, yielding a maximum speedup of $5.22\times$ at $10^{-6}$. These results support the use of vLLM-FI for large-scale fault-injection campaigns.
 
 \subsection{Reliability Assessment across Downstream Tasks}
 
