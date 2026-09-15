@@ -1,18 +1,16 @@
-\documentclass[journal]{IEEEtran}
+\documentclass[10pt,journal,letterpaper]{IEEEtran}
 
 \usepackage[english]{babel}
 \usepackage{svg}
-\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
-\usepackage[numbers,sort&compress]{natbib}
+\usepackage{cite}
 \usepackage{amsmath}
 \usepackage{graphicx}
-\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{booktabs}    % 优美表格线
 \usepackage{multirow}    % 合并行
 \usepackage{amssymb}     % √ 符号
 \usepackage{makecell}  
 \usepackage{array}       % 控制列宽
-\usepackage{geometry}    % 调整页边距
 \usepackage{xcolor}
 \usepackage[caption=false, font=footnotesize]{subfig}
 \usepackage[linesnumbered,ruled,vlined]{algorithm2e}
@@ -40,10 +38,14 @@
 
 
 
-\geometry{margin=1in}
 
 \title{vLLM-FI: A Fault Injection Framework for Reliability Evaluation of LLM Inference}
-\author{Jie~Ren, Zizhen~Liu, Songwei~Pei, Cheng~Liu, Huawei~Li, and Shangguang~Wang%
+\author{Jie~Ren,
+Zizhen~Liu,~\IEEEmembership{Member,~IEEE,}
+Songwei~Pei,~\IEEEmembership{Member,~IEEE,}
+Cheng~Liu,~\IEEEmembership{Senior~Member,~IEEE,}
+Huawei~Li,~\IEEEmembership{Senior~Member,~IEEE,}
+and Shangguang~Wang,~\IEEEmembership{Senior~Member,~IEEE}%
 \thanks{Jie Ren, Songwei Pei, and Shangguang Wang are with Beijing University of Posts and Telecommunications, Beijing, China.}%
 \thanks{Zizhen Liu and Huawei Li are with the Institute of Computing Technology, Chinese Academy of Sciences, Beijing, China.}%
 \thanks{Cheng Liu is with North China Electric Power University, China.}%
@@ -54,12 +56,12 @@
 \maketitle
 
 \begin{abstract}
-Large language models (LLMs) are increasingly deployed through multi-GPU distributed inference. However, existing model-level fault-injection tools provide limited systematic support for this setting, while traditional fault models do not adequately capture compute and communication fault exposure in distributed LLM inference. Moreover, conventional CPU-mediated bit mutation incurs repeated host--device transfers and synchronization, making large-scale fault-injection campaigns increasingly costly.
-
-To address these limitations, we present vLLM-FI, a runtime fault-injection and reliability-evaluation framework integrated into vLLM that extends conventional fault models to cover both compute and communication faults in distributed inference. vLLM-FI supports tensor- and pipeline-parallel inference and multiple quantization strategies, together with rank-, stage-, and module-aware fault targeting. A customized CUDA operator applies in-place bit flips directly to GPU-resident tensors, avoiding CPU-mediated data mutation and reducing injection overhead. vLLM-FI further integrates with \texttt{lm-evaluation-harness}, connecting configurable fault-injection campaigns with standardized downstream-task evaluation.
-
-% In a controlled experiment on LLaMA-3.1-8B and GSM8K, the CUDA backend reduced the runtime per run from 3578~s to 686~s at a compute-error rate of $10^{-6}$, achieving a $5.2\times$ speedup over the CPU-mediated MRFI-style backend. Using this framework, we evaluate LLM reliability across compute and communication fault models, downstream tasks, quantization strategies, and model-parallel configurations. Overall, vLLM-FI provides a reproducible platform for studying software-visible transient faults in distributed LLM inference.
+Transient hardware faults threaten large language model (LLM) inference, where autoregressive decoding and multi-GPU execution allow errors to propagate across tokens and devices. Existing model-level fault-injection tools provide limited support for distributed and quantized inference, often overlook computation-dependent fault exposure and communication faults, and incur repeated host--device transfers for bit mutation. We present vLLM-FI, a fault-injection and reliability-evaluation framework integrated with vLLM. The framework models memory, computation, and communication faults, accounting for computational exposure beyond output tensor size and perturbing software-visible communication buffers. Configuration-driven targeting coordinates injection across distributed workers, while customized CUDA operators flip bits in place on GPU-resident tensors. Support for tensor and pipeline parallelism, quantized representations, and standardized downstream-task evaluation enables systematic reliability studies under practical inference configurations. In calibration experiments, vLLM-FI matches MRFI's output-level fault effects with a maximum absolute difference of 0.62 percentage points in fault-injection correct rate. Across the evaluated all-layer projection-injection workloads, vLLM-FI achieves a $1.81\times$--$2.41\times$ end-to-end speedup over MRFI. With the inference runtime held fixed, GPU-resident injection delivers up to a $5.22\times$ speedup in total experiment runtime over an MRFI-style CPU-mediated backend under compute-fault injection. These results demonstrate lower experimental cost while preserving agreement with the reference injector under the tested settings, enabling broader reliability evaluation across fault models, tasks, quantization methods, and parallel configurations.
 \end{abstract}
+
+\begin{IEEEkeywords}
+Fault injection, reliability evaluation, large language models, distributed inference, GPU computing, quantization.
+\end{IEEEkeywords}
 
 
 
@@ -721,7 +723,7 @@ This section focuses on weight quantization, which is widely used in LLM deploym
     \label{fig:quantization_memory_error}
 \end{figure}
 
-Figure~\ref{fig:quantization_memory_faults} compares FP8, AWQ, GPTQ W4, and GPTQ W8 under memory faults across six downstream tasks. As in the preceding experiments, the fault-injection scope covers all model layers for each quantization configuration. The evaluated BER range spans from $5\times10^{-12}$ to $10^{-8}$. Across this range, weight-only quantized models show relatively stable performance, with no sharp degradation trend across the tested tasks.
+Figure~\ref{fig:quantization_memory_error} compares FP8, AWQ, GPTQ W4, and GPTQ W8 under memory faults across six downstream tasks. As in the preceding experiments, the fault-injection scope covers all model layers for each quantization configuration. The evaluated BER range spans from $5\times10^{-12}$ to $10^{-8}$. Across this range, weight-only quantized models show relatively stable performance, with no sharp degradation trend across the tested tasks.
 
 \begin{observation}
 \textbf{Observation 3:} Within the BER range evaluated in this study, weight  quantized models show relatively stable performance under memory faults, with no sharp degradation trend across the tested downstream tasks.
