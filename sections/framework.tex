@@ -30,16 +30,11 @@ For each fault model, vLLM-FI provides both fixed-count and bit-error-rate modes
 
 \begin{figure*}[t]
     \centering
-    \subfloat[Memory fault during weight loading.\label{fig:fault_memory}]
-    {\includegraphics[width=0.30\textwidth]{memory_error.drawio.pdf}}
-    \hfill
-    \subfloat[Compute fault in an operator result.\label{fig:fault_compute}]
-    {\includegraphics[width=0.30\textwidth]{compute_error.drawio.pdf}}
-    \hfill
-    \subfloat[Communication fault in a communication buffer.\label{fig:fault_comm}]
-    {\includegraphics[width=0.30\textwidth]{communication_error_v2.drawio.pdf}}
+    \includegraphics[width=\textwidth]{fault_models.pdf}
     \caption{\textbf{Model-visible fault abstractions supported by vLLM-FI.}
-    Memory faults modify model weights during loading and persist throughout subsequent inference. Compute faults perturb intermediate results produced by matrix operations. Communication faults modify software-visible buffers associated with tensor-parallel collectives or pipeline-parallel transfers.}
+    Memory faults modify model weights during loading and persist throughout subsequent inference.
+    Compute faults perturb intermediate results produced by matrix operations.
+    Communication faults modify software-visible buffers associated with tensor-parallel collectives or pipeline-parallel transfers.}
     \label{fig:three_fault_models}
 \end{figure*}
 
