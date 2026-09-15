@@ -1,0 +1,101 @@
+\section{Related Work}
+
+This section reviews two lines of research relevant to vLLM-FI: fault injection techniques and neural-network reliability analysis. The former concerns how hardware faults are represented and injected, whereas the latter examines how injected faults affect model behavior. We focus on their applicability to quantized and distributed LLM inference.
+
+\subsection{Fault Injection Tools}
+
+Fault injection techniques can be broadly categorized into hardware-level and model-level approaches. Hardware-level tools introduce faults into instructions, registers, or architectural states. GPU-Qin uses a GPU debugger, LLFI-GPU relies on compiler instrumentation, and SASSIFI injects faults at the SASS instruction level \cite{fang2014gpu,li2016understanding,hari2017sassifi}. NVBitFI builds on NVBit's dynamic binary instrumentation to provide configurable GPU fault injection \cite{villa2019nvbit,tsai2021nvbitfi}. These approaches retain detailed information about hardware-level fault behavior, but their cost increases with the number of dynamic instructions and kernel invocations. A recent study using NVBitFI found full-dataset LLM evaluation prohibitively time-consuming and therefore restricted its experiments to a limited set of inputs \cite{chai2026analysis}. This overhead makes hardware-level injection difficult to apply to large statistical campaigns involving autoregressive LLM inference.
+
+Model-level approaches improve experimental efficiency by mapping hardware faults to perturbations of model parameters, activations, or intermediate tensors. Ares showed that model-level injection can reproduce statistical behaviors consistent with hardware faults \cite{reagen2018ares}, while PyTorchFI established a widely used runtime injection mechanism based on PyTorch hooks \cite{mahmoud2020pytorchfi}. More recent studies have extended model-level injection to language models. Sun et al. modified model weights and intermediate layer outputs to study LLM reliability \cite{sun2025demystifying,sun2025ft2}. ReaLM models the mixed-precision computation flow of SmoothQuant \cite{xiao2023smoothquant} and injects errors into INT32 accumulation results \cite{xie2025realm}. These studies demonstrate that model-level abstraction provides a practical basis for large-scale reliability analysis.
+
+However, existing model-level tools remain only partially aligned with modern LLM inference systems. Most are built on standard PyTorch or Hugging Face Transformers execution paths and do not natively coordinate injection targets across distributed devices and execution stages. Supporting quantized inference generally requires separate implementations for individual quantization methods and their data representations. Moreover, existing rate-based fault models commonly determine the number of injected faults from tensor or output size, without reflecting the computation required to produce the output or the communication volume between devices. The representative tools in Table~\ref{tab:comparison} also lack communication-buffer fault injection and an in-place GPU injection path integrated with a distributed inference engine. Consequently, they do not jointly provide fault models that account for computation and communication volume, distributed target control, support for multiple quantization methods, and efficient GPU-resident injection.
+
+Table~\ref{tab:comparison} compares vLLM-FI with representative model-level fault injection approaches.
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of vLLM-FI with representative model-level fault injection approaches.}
+\label{tab:comparison}
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{3pt}
+
+\resizebox{\linewidth}{!}{
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Feature}
+& \textbf{vLLM-FI}
+& \textbf{ReaLM} \cite{xie2025realm}
+& \textbf{Sun et al.} \cite{sun2025demystifying}
+& \textbf{MRFI} \cite{huang2024mrfi} \\
+\midrule
+
+\multicolumn{5}{c}{\textit{\textbf{System Integration}}} \\
+\midrule
+Target model class
+    & \textbf{LLM} & LLM & LLM & CNN/DNN \\
+Inference framework
+    & \textbf{vLLM} & HF Transformers & HF Transformers & Native PyTorch \\
+In-place GPU injection
+    & \textbf{$\checkmark$} & $\times$ & $\times$ & $\times$ \\
+\midrule
+
+\multicolumn{5}{c}{\textit{\textbf{Injection Strategy}}} \\
+\midrule
+Random bit flip
+    & \textbf{$\checkmark$} & $\checkmark$ & $\checkmark$ & $\checkmark$ \\
+Targeted bit flip
+    & \textbf{$\checkmark$} & $\checkmark$ & $\times$ & $\checkmark$ \\
+Rate-based injection
+    & \textbf{$\checkmark$} & $\checkmark$ & $\times$ & $\checkmark$ \\
+Fixed-count injection
+    & \textbf{$\checkmark$} & $\times$ & $\checkmark$ & $\checkmark$ \\
+\midrule
+
+\multicolumn{5}{c}{\textit{\textbf{Fault Coverage}}} \\
+\midrule
+Compute faults
+    & \textbf{$\checkmark$} & $\checkmark$ & $\checkmark$ & $\times$ \\
+Memory faults
+    & \textbf{$\checkmark$} & $\times$ & $\checkmark$ & $\checkmark$ \\
+Communication faults
+    & \textbf{$\checkmark$} & $\times$ & $\times$ & $\times$ \\
+Quantized inference
+    & \textbf{$\checkmark$} & $\checkmark$ & $\checkmark$ & $\times$ \\
+\midrule
+
+\multicolumn{5}{c}{\textit{\textbf{Parallelism Support}}} \\
+\midrule
+Tensor parallelism
+    & \textbf{$\checkmark$} & $\times$ & $\times$ & $\times$ \\
+Pipeline parallelism
+    & \textbf{$\checkmark$} & $\times$ & $\times$ & $\times$ \\
+\bottomrule
+\end{tabular}
+}
+
+\vspace{2pt}
+\footnotesize
+$\checkmark$ indicates explicit support; $\times$ indicates no support.
+\end{table}
+
+\subsection{Reliability Analysis}
+
+The reliability of conventional deep neural networks has been extensively studied \cite{bolchini2023analyzing,li2017understanding,xue2022winograd,xu2020persistent,xu2021reliability,mahmoud2020hardnn,schorn2018accurate,ibrahim2020soft,liu2022special}. Existing work has examined the effects of algorithm implementation, numerical representation, data reuse, and fault location. Bolchini et al. compared the reliability of GEMM-, FFT-, and Winograd-based implementations \cite{bolchini2023analyzing}; Xue et al. analyzed the fault tolerance of Winograd convolution \cite{xue2022winograd}; and Li et al. characterized error propagation across data types, bit positions, and data-reuse patterns \cite{li2017understanding}. Other studies localized vulnerability at the channel, neuron, and hardware-path levels \cite{mahmoud2020hardnn,schorn2018accurate,xu2020persistent,xu2021reliability}. Reliability studies of Vision Transformers further extended this line of research to Transformer architectures. Xue et al. reported different fault sensitivities between linear operations and nonlinear operators such as Softmax and GELU \cite{xue2023soft}, while Roquet et al. evaluated Vision Transformers across GPU architectures using neutron-beam experiments \cite{roquet2024cross}. Ma et al. further investigated reliability differences among Transformer components \cite{ma2023error}. Although these studies established important reliability-analysis methods and revealed fault characteristics specific to Transformer operators, they mainly considered non-autoregressive workloads and therefore do not capture the iterative decoding, persistent inference states, or distributed execution of modern LLM services.
+
+Recent studies have directly examined language-model reliability. Agarwal et al. used intermediate-representation-level injection to evaluate BERT, GPT-2, and T5, showing that resilience depends on model architecture, input, and downstream task \cite{agarwal2023resilience}. Sun et al. conducted an end-to-end statistical study covering downstream tasks, quantization, fine-tuning, mixture-of-experts models, generation strategies, and chain-of-thought reasoning \cite{sun2025demystifying}. Their results showed that these factors can substantially change the observed resilience of an LLM. ReaLM characterized reliability differences among LLM components and showed that normalization operations can amplify component-level differences in fault sensitivity; it also identified a joint effect of error magnitude and frequency on model performance \cite{xie2025realm}.
+
+Taken together, existing studies show that LLM reliability depends on the downstream task, model component, numerical representation, and inference configuration. However, the studies reviewed here do not jointly evaluate these factors under a high-throughput distributed inference framework. Agarwal et al. evaluated models containing 38.9--222.9 million parameters using only five or ten inputs per benchmark. Sun et al. considered multiple fault types and downstream tasks, but each inference run contained a single fault event, and their quantization analysis focused on the GPTQ 4-bit and 8-bit variants of Qwen2.5-7B relative to BF16. Distributed parallel configurations and communication-buffer faults also remain insufficiently explored. These limitations motivate a unified evaluation framework that can examine computation, memory, and communication faults across downstream tasks, quantization strategies, and model-parallel configurations.
+%In summary, prior work has demonstrated that fault injection is an effective method for analyzing neural network reliability and has begun to reveal the vulnerability of Transformer and LLM components. However, existing studies still lack a fault injection tool that is deeply integrated with a high performance LLM inference framework and can support distributed parallelism and multiple deployment optimization mechanisms. vLLM-FI is designed to fill this gap. Built on the vLLM inference engine, it preserves the high throughput inference pipeline while supporting fine grained and configurable runtime fault injection, thereby providing experimental support for reliability evaluation of large language models in realistic deployment environments.
+
+
+% English manuscript draft for Sections 3 and 4.
+% Required packages in the main preamble:
+% \usepackage{amsmath,amssymb,graphicx,booktabs,array,tabularx}
+% \usepackage[caption=false,font=footnotesize]{subfig}
+% \usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+%
+% Author checks before submission:
+% 1. Confirm whether the reported memory experiments use single- or double-bit
+%    events. The framework supports both modes; Section 5 must state the mode.
+% 2. Confirm that distributed and single-GPU communication experiments use
+%    the same target modules.

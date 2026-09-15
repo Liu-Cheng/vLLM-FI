@@ -1,0 +1,50 @@
+\section{Experimental Setup}
+\label{sec:experimental_setup}
+
+This section reports the common setup used to validate vLLM-FI and evaluate LLM inference reliability.
+
+\subsection{Experimental Platform and Workloads}
+\label{subsec:platform_workloads}
+
+Experiments run on a server with eight NVIDIA A100-SXM4-80GB GPUs. Distributed experiments use four GPUs. The software stack consists of Ubuntu 20.04.6, Python 3.12.11, PyTorch 2.6.0+cu124, CUDA 12.2, NCCL 2.21.5, vLLM 0.8.5 \cite{kwon2023efficient}, and \texttt{lm-evaluation-harness} 0.4.9.2. All tasks use fixed random seeds. Generative tasks disable sampling and use deterministic decoding.
+
+LLaMA-3.1-8B \cite{grattafiori2024llama} is the primary model for tool validation, task-level reliability analysis, and quantization experiments.The quantization study evaluates AWQ W4A16 \cite{lin2024awq}, GPTQ W4A16, GPTQ W8A16 \cite{frantar2022gptq}, and FP8 W8A16 variants from the same model family. Communication and model-parallel experiments also include Qwen-2.5-7B \cite{yang2024qwen25} and Mistral-7B \cite{jiang2023mistral}.
+
+The workload suite covers knowledge questions, commonsense reasoning, multidisciplinary knowledge, mathematical reasoning, text summarization, and code generation. ARC-Challenge, HellaSwag, MMLU, and GSM8K use the 100-sample configurations supplied by tinyBenchmarks \cite{polo2024tinybenchmarks} to control the cost of repeated fault-injection runs. Table~\ref{tab:workloads} lists the tasks and native metrics.
+
+% This table is intentionally single-column and avoids resizebox/scalebox.
+\begin{table}[t]
+\caption{Downstream Workloads and Evaluation Metrics}
+\label{tab:workloads}
+\centering
+\footnotesize
+\renewcommand{\arraystretch}{1.10}
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabularx}{\columnwidth}{@{}>{\raggedright\arraybackslash}X >{\centering\arraybackslash}p{0.43in} >{\centering\arraybackslash}p{0.38in} >{\raggedright\arraybackslash}p{0.78in}@{}}
+\toprule
+\textbf{Task} & \textbf{Samples} & \textbf{Shots} & \textbf{Metric} \\
+\midrule
+\multicolumn{4}{@{}l}{\itshape Multiple-choice tasks} \\
+tinyARC \cite{clark2018think}              & 100   & 25 & Norm. accuracy \\
+tinyHellaSwag \cite{zellers2019hellaswag} & 100   & 10 & Norm. accuracy \\
+tinyMMLU \cite{hendrycks2020measuring}    & 100   & 0  & Norm. accuracy \\
+\addlinespace[2pt]
+\multicolumn{4}{@{}l}{\itshape Autoregressive generation tasks} \\
+tinyGSM8K \cite{cobbe2021training}        & 100   & 5  & Exact Match \\
+CNN/DailyMail \cite{hermann2015teaching}  & 1,149 & 0  & ROUGE-1 \cite{lin2004rouge} \\
+HumanEval \cite{chen2021evaluating}       & 164   & 0  & Pass@1 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Evaluation Protocol}
+\label{subsec:evaluation_protocol}
+
+The fault-free performance of each task and model configuration serves as its baseline. Let $m_{\mathrm{clean}}$ denote this baseline and $m_{\mathrm{fault}}^{(i)}$ the metric from fault-injection run $i$. Performance retention is
+\begin{equation}
+    R^{(i)}=\frac{m_{\mathrm{fault}}^{(i)}}{m_{\mathrm{clean}}}.
+    \label{eq:performance_retention}
+\end{equation}
+A value of $R=1$ matches the fault-free baseline. A smaller value indicates greater degradation. Each quantized configuration uses its own fault-free result as the baseline.
+
+Section~5 presents tool correctness and runtime cost, memory and compute faults across tasks, quantized representations, communication paths, and TP/PP rank selection. Each result subsection begins with its experiment-specific fault settings and controls, followed by quantitative results and analysis.
