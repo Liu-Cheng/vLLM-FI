@@ -11,7 +11,7 @@ To address these challenges, we present vLLM-FI, a fault-exposure-aware runtime 
 The main contributions of this paper are summarized as follows:
 
 \begin{itemize}
-    \item We extend existing fault models for distributed LLM inference by accounting for computation exposure beyond output tensor size and incorporating faults in software-visible inter-device communication buffers.
+    \item We develop fault-exposure-aware models for distributed LLM inference, covering memory, computation, and communication faults. The models derive compute-fault counts from runtime multiply--accumulate workloads rather than output size alone, and communication-fault counts from buffer sizes in tensor-parallel collectives and pipeline-stage transfers.
 
     \item We design a vLLM-native fault injection architecture that supports distributed and quantized LLM inference. Customized CUDA operators perform efficient in-place bit flips on GPU-resident tensors, while configuration-driven targeting coordinates fault injection across distributed execution processes.
 
