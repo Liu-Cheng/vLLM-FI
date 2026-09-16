@@ -1,7 +1,7 @@
 \section{vLLM-FI Framework}
 \label{sec:framework}
 
-This section presents the design and implementation of vLLM-FI. The framework addresses three problems in applying model-level fault injection to distributed LLM inference: conventional fault models do not sufficiently represent the computation and communication involved in distributed inference; fault configurations and injection targets must be integrated into the multi-process execution path of vLLM; and CPU-assisted bit modification introduces increasing overhead as the number of injected faults grows. The following subsections describe the overall architecture, the extended fault models, the vLLM-native injection and evaluation workflow, and the GPU-resident bit-flip operator.
+vLLM-FI extends the vLLM inference engine with runtime fault injection and reliability evaluation, reusing its native model execution and distributed runtime. First, we extend fault models for distributed LLM inference to account for computational workload and inter-device communication, enabling analysis of how faults affect inference outputs and downstream-task performance under different execution configurations. Second, we integrate fault configuration and target selection into vLLM's multi-process execution path to coordinate injection across distributed Workers and apply faults to the intended runtime tensors. Third, we implement GPU-resident, in-place bit-flip operators to reduce data transfers and injection overhead in large-scale fault-injection campaigns. The following subsections detail the system architecture, fault models, injection and evaluation workflow, and GPU implementation.
 
 \subsection{System Architecture}
 \label{subsec:architecture}
