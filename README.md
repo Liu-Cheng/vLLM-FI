@@ -12,6 +12,7 @@ Overleaf 的主文档保持为 `main.tex`。各章节通过 `\input` 加载，�
 | `sections/experimental-setup.tex` | 实验设置 |
 | `sections/experimental-results.tex` | 实验结果 |
 | `sections/conclusion.tex` | 结论 |
+| `figures/architecture.tex` | Figure 1 图注与浮动体；在引言后提前加载，以排在第 3 页顶部 |
 | `sample.bib` | 参考文献条目 |
 
 ## 协作编辑
