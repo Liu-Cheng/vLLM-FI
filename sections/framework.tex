@@ -32,9 +32,10 @@ For each fault model, vLLM-FI provides both fixed-count and bit-error-rate modes
 
 \subsubsection{Memory Faults}
 
-Memory faults model weight corruption that occurs during model storage or loading. Error-correcting codes can detect or correct many single-bit errors, whereas uncorrectable multi-bit errors may still result in silent data corruption \cite{hsiao2023silent,papadimitriou2021demystifying,jiao2025large}. Accordingly, vLLM-FI injects random double-bit flips while weights are loaded into the GPU execution path. Once modified, a corrupted weight remains active during subsequent forward computations and autoregressive decoding.
+Memory faults may affect model weights, activations, and KV caches. We focus on weights because they typically remain resident in GPU memory and are reused throughout decoding. Activations and KV caches have shorter lifetimes, which limits how long their corruption persists. Thus, memory faults in this work refer to persistent weight corruption.
+Such weight corruption may occur during model storage or loading. Error-correcting codes can detect or correct many single-bit errors, but uncorrectable multi-bit errors may still cause silent data corruption \cite{hsiao2023silent,papadimitriou2021demystifying,jiao2025large}. To model these errors, vLLM-FI injects random double-bit flips as weights enter the GPU execution path. 
 
-For a weight tensor $\mathbf{W}$ containing $|\mathbf{W}|$ elements with a storage width of $b$ bits per element, let $\rho_{\mathrm{mem}}$ denote the fault-event rate per stored bit. The expected number of memory-fault events is
+To determine the injection count, consider a weight tensor $\mathbf{W}$ containing $|\mathbf{W}|$ elements, each with a storage width of $b$ bits. Let $\rho_{\mathrm{mem}}$ denote the fault event rate per stored bit. The expected number of memory fault events is
 
 \begin{equation}
     \lambda_{\mathrm{mem}}
