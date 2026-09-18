@@ -9,9 +9,10 @@ Overleaf 的主文档保持为 `main.tex`。各章节通过 `\input` 加载，�
 | `sections/introduction.tex` | 引言 |
 | `sections/related-work.tex` | 相关工作 |
 | `sections/framework.tex` | vLLM-FI 框架 |
-| `sections/experimental-setup.tex` | 实验设置 |
-| `sections/experimental-results.tex` | 实验结果 |
+| `sections/experimental-setup.tex` | 实验章节的 Experimental Setup 小节，由 experimental-results.tex 加载 |
+| `sections/experimental-results.tex` | Experimental Evaluation 章节，包含实验设置和各项结果 |
 | `sections/conclusion.tex` | 结论 |
+| `sections/acknowledgments.tex` | 致谢与 AI 使用声明（不编号） |
 | `figures/architecture.tex` | Figure 1 图注与浮动体；在引言后提前加载，以排在第 3 页顶部 |
 | `sample.bib` | 参考文献条目 |
 

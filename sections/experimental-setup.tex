@@ -1,14 +1,18 @@
-\section{Experimental Setup}
+\subsection{Experimental Setup}
 \label{sec:experimental_setup}
 
-This section reports the common setup used to validate vLLM-FI and evaluate LLM inference reliability.
+This subsection reports the common setup used to validate vLLM-FI and evaluate LLM inference reliability.
 
-\subsection{Experimental Platform and Workloads}
+\subsubsection{Experimental Platform}
 \label{subsec:platform_workloads}
 
 Experiments run on a server with eight NVIDIA A100-SXM4-80GB GPUs. Distributed experiments use four GPUs. The software stack consists of Ubuntu 20.04.6, Python 3.12.11, PyTorch 2.6.0+cu124, CUDA 12.2, NCCL 2.21.5, vLLM 0.8.5 \cite{kwon2023efficient}, and \texttt{lm-evaluation-harness} 0.4.9.2. All tasks use fixed random seeds. Generative tasks disable sampling and use deterministic decoding.
 
-LLaMA-3.1-8B \cite{grattafiori2024llama} is the primary model for tool validation, task-level reliability analysis, and quantization experiments.The quantization study evaluates AWQ W4A16 \cite{lin2024awq}, GPTQ W4A16, GPTQ W8A16 \cite{frantar2022gptq}, and FP8 W8A16 variants from the same model family. Communication and model-parallel experiments also include Qwen-2.5-7B \cite{yang2024qwen25} and Mistral-7B \cite{jiang2023mistral}.
+\subsubsection{Models and Quantization}
+
+LLaMA-3.1-8B \cite{grattafiori2024llama} is the primary model for tool validation, task-level reliability analysis, and quantization experiments. The quantization study evaluates AWQ W4A16 \cite{lin2024awq}, GPTQ W4A16, GPTQ W8A16 \cite{frantar2022gptq}, and FP8 W8A16 variants from the same model family. Communication and model-parallel experiments also include Qwen-2.5-7B \cite{yang2024qwen25} and Mistral-7B \cite{jiang2023mistral}.
+
+\subsubsection{Tasks and Metrics}
 
 The workload suite covers knowledge questions, commonsense reasoning, multidisciplinary knowledge, mathematical reasoning, text summarization, and code generation. ARC-Challenge, HellaSwag, MMLU, and GSM8K use the 100-sample configurations supplied by tinyBenchmarks \cite{polo2024tinybenchmarks} to control the cost of repeated fault-injection runs. Table~\ref{tab:workloads} lists the tasks and native metrics.
 
@@ -37,7 +41,7 @@ HumanEval \cite{chen2021evaluating}       & 164   & 0  & Pass@1 \\
 \end{tabularx}
 \end{table}
 
-\subsection{Evaluation Protocol}
+\subsubsection{Evaluation Protocol}
 \label{subsec:evaluation_protocol}
 
 The fault-free performance of each task and model configuration serves as its baseline. Let $m_{\mathrm{clean}}$ denote this baseline and $m_{\mathrm{fault}}^{(i)}$ the metric from fault-injection run $i$. Performance retention is
@@ -47,4 +51,4 @@ The fault-free performance of each task and model configuration serves as its ba
 \end{equation}
 A value of $R=1$ matches the fault-free baseline. A smaller value indicates greater degradation. Each quantized configuration uses its own fault-free result as the baseline.
 
-Section~5 presents tool correctness and runtime cost, memory and compute faults across tasks, quantized representations, communication paths, and TP/PP rank selection. Each result subsection begins with its experiment-specific fault settings and controls, followed by quantitative results and analysis.
+The following subsections present tool correctness and runtime cost, memory and compute faults across tasks, quantized representations, communication paths, and TP/PP rank selection. Each result subsection begins with its experiment-specific fault settings and controls, followed by quantitative results and analysis.

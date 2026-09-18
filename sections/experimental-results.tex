@@ -1,6 +1,9 @@
-\section{Experimental Results}
+\section{Experimental Evaluation}
+\label{sec:experimental_evaluation}
 
-This section evaluates the effectiveness of vLLM-FI and the reliability of large language models under different fault conditions. We first calibrate the fault injection behavior of vLLM-FI against MRFI. We then analyze the effects of compute and memory faults across downstream tasks and evaluate how weight-only quantization affects sensitivity to memory faults. Finally, we examine reliability differences in distributed inference, including those associated with communication strategies and model-parallel configurations. Unless otherwise specified, the fault injection scope covers all model layers. For device-specific injection in model-parallel experiments, the scope covers all model layers or layer partitions assigned to the selected GPU.
+This section evaluates the effectiveness of vLLM-FI and the reliability of large language models under different fault conditions. We first describe the experimental setup and then calibrate the fault injection behavior of vLLM-FI against MRFI. We then analyze the effects of compute and memory faults across downstream tasks and evaluate how weight-only quantization affects sensitivity to memory faults. Finally, we examine reliability differences in distributed inference, including those associated with communication strategies and model-parallel configurations. Unless otherwise specified, the fault injection scope covers all model layers. For device-specific injection in model-parallel experiments, the scope covers all model layers or layer partitions assigned to the selected GPU.
+
+\input{sections/experimental-setup}
 
 \subsection{Tool Validation and Calibration}
 \begin{figure}[t]

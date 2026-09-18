@@ -15,7 +15,7 @@ Figure~\ref{fig:vllmfi_architecture}(b) shows where the configured faults are ap
 \subsection{Extended Fault Models}
 \label{subsec:fault_models}
 
-vLLM-FI supports memory, compute, and communication faults, which respectively target model weights, matrix-computation outputs, and software-visible communication buffers. As illustrated in Fig.~\ref{fig:three_fault_models}, a memory fault persists after weight loading, a compute fault perturbs an intermediate result during inference, and a communication fault affects data transferred between devices.
+vLLM-FI supports memory, compute, and communication faults. In this work, these models target model weights, matrix-computation outputs, and software-visible communication buffers, respectively. As illustrated in Fig.~\ref{fig:three_fault_models}, injected weight corruption persists after loading, a compute fault perturbs an intermediate result during inference, and a communication fault affects data transferred between devices.
 
 For each fault model, vLLM-FI provides both fixed-count and bit-error-rate modes. Fixed-count mode directly specifies the number of fault events. In bit-error-rate mode, the number of fault events is sampled from a Poisson distribution whose parameter is determined by the exposure associated with the selected fault model.
 
@@ -32,8 +32,9 @@ For each fault model, vLLM-FI provides both fixed-count and bit-error-rate modes
 
 \subsubsection{Memory Faults}
 
-Memory faults may affect model weights, activations, and KV caches. We focus on weights because they typically remain resident in GPU memory and are reused throughout decoding. Activations and KV caches have shorter lifetimes, which limits how long their corruption persists. Thus, memory faults in this work refer to persistent weight corruption.
-Such weight corruption may occur during model storage or loading. Error-correcting codes can detect or correct many single-bit errors, but uncorrectable multi-bit errors may still cause silent data corruption \cite{hsiao2023silent,papadimitriou2021demystifying,jiao2025large}. To model these errors, vLLM-FI injects random double-bit flips as weights enter the GPU execution path. 
+Memory faults can corrupt data stored during LLM inference, including model weights, activations, and the KV cache. This work focuses on model weights because their long lifetime and repeated reuse allow corruption to affect many subsequent forward computations and decoding steps. A corrupted weight can therefore introduce persistent perturbations into inference and degrade downstream-task performance.
+
+To evaluate this effect, vLLM-FI applies configurable bit flips to selected weight tensors as they are loaded into GPU memory. The modified values are retained and used in subsequent inference, allowing the evaluation workflow to measure their impact on model outputs. The loading stage serves as the injection point for establishing persistent weight corruption; the model does not restrict the physical occurrence of memory faults to model loading.
 
 To determine the injection count, consider a weight tensor $\mathbf{W}$ containing $|\mathbf{W}|$ elements, each with a storage width of $b$ bits. Let $\rho_{\mathrm{mem}}$ denote the fault event rate per stored bit. The expected number of memory fault events is
 
