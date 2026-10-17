@@ -8,7 +8,7 @@ vLLM-FI extends the vLLM inference engine with runtime fault injection and relia
 
 vLLM improves inference throughput and GPU memory utilization through continuous batching, PagedAttention-based KV-cache management, optimized computation kernels, quantized model execution, and distributed parallelism \cite{kwon2023efficient}. These capabilities make vLLM a suitable foundation for evaluating the reliability of practical LLM inference systems. However, they also make conventional model-level fault injection difficult to apply directly. A model may be partitioned differently according to the selected parallel strategy, and multiple parallel ranks are executed in separate Worker processes. Consequently, the model layers, parameters, intermediate results, and communication buffers to be injected are distributed across multiple devices and processes.
 
-Figure~\ref{fig:vllmfi_architecture}(a) presents the overall vLLM-FI workflow, from fault configuration and task inputs through the vLLM-FI executor to evaluation. The input stage specifies the fault type, mode, target layer, and rank together with the model, parallelism, and inference settings. The executor integrates \textit{FaultConfig} with the native vLLM configuration and propagates it to the distributed Workers, while vLLM schedules task requests for token-level execution on the corresponding model partitions. The evaluation stage passes the resulting model outputs to \texttt{lm-evaluation-harness} for task-specific scoring, connecting configurable injection with downstream reliability assessment.
+Figure~\ref{fig:vllmfi_architecture}(a) presents the overall vLLM-FI workflow, from fault configuration and task inputs through the vLLM-FI executor to evaluation. The input stage specifies the fault type, mode, target layer, and rank together with the model, parallelism, and inference settings. The executor integrates FaultConfig with the native vLLM configuration and propagates it to the distributed Workers, while vLLM schedules task requests for token-level execution on the corresponding model partitions. The evaluation stage passes the resulting model outputs to lm-evaluation-harness \cite{eval-harness} for task-specific scoring, connecting configurable injection with downstream reliability assessment.
 
 Figure~\ref{fig:vllmfi_architecture}(b) shows where the configured faults are applied within a Worker's model computation. The illustrated injector maps each configuration to a target in the attention or MLP block: a memory fault modifies the QKV projection weights, a compute fault perturbs an attention-computation result, and a communication fault modifies the output buffer associated with the MLP down projection before inter-device exchange. These examples connect the experiment-level settings in Fig.~\ref{fig:vllmfi_architecture}(a) to concrete injection locations in Fig.~\ref{fig:vllmfi_architecture}(b). At each selected location, the fault model determines the number of events, and the CUDA backend performs in-place bit flips on the GPU-resident tensor.
 
@@ -36,19 +36,15 @@ Memory faults can corrupt data stored during LLM inference, including model weig
 
 To evaluate this effect, vLLM-FI applies configurable bit flips to selected weight tensors as they are loaded into GPU memory. The modified values are retained and used in subsequent inference, allowing the evaluation workflow to measure their impact on model outputs. The loading stage serves as the injection point for establishing persistent weight corruption; the model does not restrict the physical occurrence of memory faults to model loading.
 
-To determine the injection count, consider a weight tensor $\mathbf{W}$ containing $|\mathbf{W}|$ elements, each with a storage width of $b$ bits. Let $\rho_{\mathrm{mem}}$ denote the fault event rate per stored bit. The expected number of memory fault events is
-
-\begin{equation}
+To determine the injection count, consider a weight tensor $\mathbf{W}$ containing $|\mathbf{W}|$ elements, each with a storage width of $b$ bits. Let $\rho_{\mathrm{mem}}$ denote the effective fault-event rate per stored bit over the modeled injection exposure, rather than a rate per unit time. The expected number of memory fault events and the corresponding fault-count distribution are modeled as
+\begin{align}
     \lambda_{\mathrm{mem}}
-    =
-    |\mathbf{W}|b\rho_{\mathrm{mem}},
-    \qquad
+    &= |\mathbf{W}|b\rho_{\mathrm{mem}},
+    \label{eq:memory_exposure}\\
     N_{\mathrm{faults}}^{\mathrm{mem}}
-    \sim
-    \operatorname{Poisson}(\lambda_{\mathrm{mem}}).
-    \label{eq:memory_exposure}
-\end{equation}
-
+    &\sim \operatorname{Poisson}(\lambda_{\mathrm{mem}}).
+    \label{eq:memory_poisson}
+\end{align}
 
 \subsubsection{Compute Faults}
 
@@ -56,29 +52,21 @@ Compute faults model the effect of transient errors in arithmetic units on inter
 
 For example, multiplying matrices with shapes $(a_1,a_2)$ and $(a_2,a_1)$ produces an output containing $a_1^2$ elements, but requires $a_1^2a_2$ multiply--accumulate operations. Increasing $a_2$ therefore increases the computational fault exposure without changing the number of output elements. This difference becomes more important for LLMs because of their large projection dimensions and the repeated execution of matrix operations during autoregressive decoding.
 
-Following prior LLM reliability studies \cite{sun2025demystifying,sun2025ft2,xie2025realm}, vLLM-FI injects compute faults into the outputs of GEMM and related matrix operations. However, the number of faults is determined by the estimated multiply--accumulate workload rather than solely by the output-tensor size. Let $\mathcal{C}_{\mathrm{total}}$ be the estimated number of executed MAC operations and $b_{\mathrm{inj}}$ be the data width at the injection point. The compute exposure and the expected number of fault events are defined as
-
-\begin{equation}
+Following prior LLM reliability studies \cite{sun2025demystifying,sun2025ft2,xie2025realm}, vLLM-FI injects compute faults into the outputs of GEMM and related matrix operations. However, the number of faults is determined by the estimated multiply--accumulate workload rather than solely by the output-tensor size. Let $\mathcal{C}_{\mathrm{total}}$ be the estimated number of executed MAC operations and $b_{\mathrm{inj}}$ be the data width at the injection point. The bit-width-weighted MAC exposure proxy, expected fault count, and fault-count distribution are modeled as follows:
+\begin{align}
     \mathcal{E}_{\mathrm{comp}}
-    =
-    \mathcal{C}_{\mathrm{total}}b_{\mathrm{inj}},
-    \qquad
+    &= \mathcal{C}_{\mathrm{total}}b_{\mathrm{inj}},
+    \label{eq:compute_exposure}\\
     \lambda_{\mathrm{comp}}
-    =
-    \rho_{\mathrm{comp}}\mathcal{E}_{\mathrm{comp}},
-    \label{eq:compute_exposure}
-\end{equation}
-
-\begin{equation}
+    &= \rho_{\mathrm{comp}}\mathcal{E}_{\mathrm{comp}},
+    \label{eq:compute_lambda}\\
     N_{\mathrm{faults}}^{\mathrm{comp}}
-    \sim
-    \operatorname{Poisson}(\lambda_{\mathrm{comp}}),
+    &\sim \operatorname{Poisson}(\lambda_{\mathrm{comp}}),
     \label{eq:compute_poisson}
-\end{equation}
+\end{align}
+where $\rho_{\mathrm{comp}}$ denotes the effective fault-event rate per bit-width-weighted MAC operation. The exposure is a model-level proxy and does not represent an exact count of physical bit-level operations inside the GPU.
 
-where $\rho_{\mathrm{comp}}$ denotes the compute-fault event rate per exposed bit operation.
-
-Algorithm~\ref{alg:mac_estimation} summarizes the runtime MAC estimation procedure. Linear projections use their executed batch size, input dimension, and output dimension. Fused modules, such as \texttt{gate\_up\_proj}, are treated according to the dimensions of the fused runtime operator. Attention computation is estimated using the sequence metadata provided by vLLM, allowing the framework to distinguish prefill from decode and to account for the effective number of query--key pairs under causal attention. The current model excludes non-MAC operations such as Softmax, normalization, rotary position encoding, and data movement.
+Algorithm~\ref{alg:mac_estimation} summarizes the runtime MAC estimation procedure. Linear projections use their executed batch size, input dimension, and output dimension. Fused modules, such as gate\_up\_proj, are treated according to the dimensions of the fused runtime operator. Attention computation is estimated using the sequence metadata provided by vLLM, allowing the framework to distinguish prefill from decode and to account for the effective number of query--key pairs under causal attention. 
 
 \begin{algorithm}[t]
 \footnotesize
@@ -143,197 +131,281 @@ $\mathcal{C}_{\mathrm{total}}
 
 Communication faults model errors affecting data exchanged between devices during distributed inference. vLLM-FI targets software-visible communication buffers in both tensor-parallel and pipeline-parallel execution. For tensor parallelism, faults are injected into buffers associated with collective operations such as All-Reduce. For pipeline parallelism, faults are injected into activation buffers transferred between adjacent pipeline stages.
 
-At a selected communication location, let $\mathbf{B}$ denote the communication buffer, $|\mathbf{B}|$ the number of elements in that buffer, $b$ the number of bits per element, and $\rho_{\mathrm{comm}}$ the communication-fault event rate. The number of injected communication faults is sampled as
+At a selected communication location, let $\mathbf{B}$ denote the communication buffer, $|\mathbf{B}|$ the number of elements in that buffer, $b$ the number of bits per element, and $\rho_{\mathrm{comm}}$ the effective fault-event rate per buffer bit for the modeled injection exposure. The expected event count and corresponding distribution are
 
-\begin{equation}
+\begin{align}
     \lambda_{\mathrm{comm}}
-    =
-    |\mathbf{B}|b\rho_{\mathrm{comm}},
-    \qquad
+    &= |\mathbf{B}|b\rho_{\mathrm{comm}},
+    \label{eq:comm_exposure}\\
     N_{\mathrm{faults}}^{\mathrm{comm}}
-    \sim
-    \operatorname{Poisson}(\lambda_{\mathrm{comm}}).
-    \label{eq:comm_exposure}
-\end{equation}
+    &\sim \operatorname{Poisson}(\lambda_{\mathrm{comm}}).
+    \label{eq:comm_poisson}
+\end{align}
 
-The selected bits are modified before the corresponding collective operation or pipeline-stage transfer. The corrupted buffer therefore participates in subsequent communication and computation, allowing the resulting error to propagate across devices. This abstraction models corruption that is visible in the software communication path. Low-level link protocols, retransmission mechanisms, and internal interconnect behavior remain outside the scope of vLLM-FI.
+The selected bits are modified before the corresponding collective operation or pipeline-stage transfer. The corrupted buffer therefore participates in subsequent communication and computation, allowing the resulting error to propagate across devices.
 
 
 \subsection{vLLM-Native Fault Injection and Evaluation}
 \label{subsec:runtime_injection}
 
-Introducing an independent fault configuration into vLLM is non-trivial. To reach the actual injection locations, a newly defined configuration must pass through the Engine, Executor, Worker processes, ModelRunner, and runtime layer implementations. vLLM-FI addresses this problem by implementing \textit{FaultConfig} as a sub-configuration of \textit{VllmConfig}. The fault configuration can therefore reuse the native vLLM configuration-propagation path and reach the corresponding injection locations inside each Worker. Each Worker evaluates the fault-activation settings in \textit{FaultConfig} against its current device, rank, pipeline stage, model module, fault type, and execution conditions, and activates the corresponding injector when the configured conditions are satisfied. In this way, \textit{FaultConfig} provides configuration-level support for distributed fault injection without introducing an independent cross-process control path.
+A fault configuration must reach the injection sites executed by distributed vLLM Workers. vLLM-FI embeds FaultConfig in VllmConfig and uses vLLM's existing propagation path through the Engine, Executor, Worker, and ModelRunner. Each Worker consults the configuration at its local injection sites and uses its rank, pipeline stage, and target information to determine whether a fault applies. This avoids a separate cross-process control channel.
 
-Weight fault injection additionally requires resolving the runtime parameter held by each Worker. If injection were performed by traversing the entire model after model loading, the target specified in the fault configuration would have to be remapped to the runtime parameters held by different Workers under the selected parallel configuration. To avoid implementing this additional mapping procedure, vLLM-FI embeds weight fault injection into the weight-loading methods of vLLM linear layers. At this location, the target model layer and the parameter currently being loaded by the Worker are directly available. Without tensor parallelism, the injector operates on the complete loaded parameter. Under tensor parallelism, it operates on the weight shard selected for the current rank. Under pipeline parallelism, the weight-loading method is executed only for the model layers assigned to the current pipeline stage. Quantized weights, including packed \texttt{qweight} parameters, follow the same injection path and are distinguished through an additional check of the parameter name and storage representation.
+Weight faults are injected during the weight-loading methods of vLLM's linear layers, where both the layer identifier and the parameter being loaded are available. The injector receives the tensor held by the local Worker: under tensor parallelism (TP) \cite{shoeybi2019megatron}, this is the local weight shard; under pipeline parallelism (PP) \cite{huang2019gpipe}, only the stage owning the layer reaches its loading site. For quantized weights, target selection also uses the stored parameter name. In the supported paths, GPTQ and AWQ target packed qweight parameters, whereas FP8 targets weight parameters.
 
-Unlike weight faults, compute and communication faults occur during runtime inference rather than during model loading. vLLM-FI therefore places their injection sites in the forward execution paths of the corresponding runtime layers. A compute fault is triggered after the selected matrix operation produces its output. A communication fault modifies the corresponding communication buffer before a tensor-parallel collective or a pipeline-stage transfer. Because these injection mechanisms execute inside the Worker, they directly operate on the runtime tensors produced under the current device and parallel context. Together with the distributed activation settings provided by \textit{FaultConfig}, the runtime injection mechanisms support tensor parallelism, pipeline parallelism, and their combined configurations. Placing the injection sites in shared runtime layer definitions also allows the same mechanism to be reused across supported model architectures.
+Compute and communication faults are injected in the corresponding forward paths. Compute injection modifies the output of a selected matrix operation after it is produced. Communication injection modifies the buffer associated with a TP collective or PP stage transfer. Locating these hooks in shared runtime layers allows the injection logic to be reused across supported model implementations.
 
-Reliability evaluation across different models, datasets, and inference configurations otherwise requires repeated implementation of dataset loading, model invocation, output processing, and task-specific metric calculation. To reduce this repeated work, vLLM-FI adapts \texttt{lm-evaluation-harness} to support \textit{FaultConfig}. The modified interface passes \textit{FaultConfig}, together with the existing vLLM parameters, to the vLLM backend. It constructs benchmark inputs, executes inference under the specified fault configuration, collects the fault-affected outputs, and computes the native metrics of the selected downstream task. This integration provides an end-to-end workflow from distributed fault injection to standardized task-level reliability evaluation.
+Algorithm~\ref{alg:vllmfi-injection} describes the procedure at a candidate site reached by a Worker. The event type determines the local tensor and its exposure. A Poisson draw gives the number of candidate fault events, which are applied when the configured rank and target selectors match.
 
+\begin{algorithm}[t]
+\footnotesize
+\DontPrintSemicolon
+\SetAlgoVlined
+\SetInd{0.35em}{0.75em}
+\SetAlgoNlRelativeSize{-1}
+
+\caption{Fault Injection in vLLM-FI}
+\label{alg:vllmfi-injection}
+
+\KwIn{Fault configuration $F$ with error rate $r$; Worker $w$}
+\KwOut{Local tensors modified at eligible injection sites}
+
+\ForEach{candidate event $e$ reached by Worker $w$}{
+    \If{$\neg\operatorname{PatternEnabled}(F,e)$}{
+        \textbf{continue}\;
+    }
+
+    \If{$e=\mathrm{WeightLoad}$}{
+        $T\leftarrow\operatorname{LocalParameter}(w,e)$\;
+        $S\leftarrow|T|$\;
+    }
+    \If{$e=\mathrm{ComputeOutput}$}{
+        $T\leftarrow\operatorname{Output}(e)$\;
+        $S\leftarrow N_{\mathrm{MAC}}(e)$\;
+    }
+    \If{$e\in\{\mathrm{TPComm},\mathrm{PPComm}\}$}{
+        $T\leftarrow\operatorname{Buffer}(e)$\;
+        $S\leftarrow N_{\mathrm{comm}}(e)$\;
+    }
+
+    $n\sim\operatorname{Poisson}\!\left(S\,b(T)\,r\right)$\;
+    \If{$n>0$ and $\operatorname{RankMatch}(F,w,e)$ and
+        $\operatorname{TargetMatch}(F,e,T)$}{
+        $m_e\leftarrow\operatorname{Mode}(F,e)$\;
+        $T\leftarrow\operatorname{BitFlip}(T,n,m_e)$\;
+    }
+}
+\end{algorithm}
+
+Here, $\operatorname{PatternEnabled}$ checks whether the configured fault type corresponds to the candidate site. $\operatorname{RankMatch}$ checks the relevant TP rank or PP stage, while $\operatorname{TargetMatch}$ checks the layer, module, and, where applicable, the parameter name. The exposure $S$ is the local parameter element count, the number of multiply--accumulate operations, or the communication exposure count. The function $b(T)$ gives the storage bit width used for sampling. The sampled value $n$ counts candidate fault events; the selected mode $m_e$ determines how many bit positions each event changes.
+
+For task-level reliability evaluation, vLLM-FI adapts lm-evaluation-harness to pass FaultConfig alongside the existing vLLM parameters. The harness prepares benchmark inputs, runs inference under the specified fault configuration, collects fault-affected outputs, and computes the selected task's native metrics. This connects Worker-local injection with standardized downstream evaluation.
+
+
+
+
+% \subsection{vLLM-Native Fault Injection and Evaluation}
+% \label{subsec:runtime_injection}
+
+% Introducing a separate fault configuration into vLLM requires carrying it through several execution layers. To reach the injection sites, the configuration must pass through the Engine, Executor, Worker, ModelRunner, and runtime layer implementations. vLLM-FI therefore implements FaultConfig as a sub-configuration of VllmConfig and reuses vLLM's native configuration-propagation path. Each Worker evaluates the configuration against its current device, rank, pipeline stage, target module, fault type, and execution conditions. This design supports distributed fault activation without a separate cross-process control channel.
+
+% Weight fault injection also requires identifying the parameter held by each Worker at runtime. Injecting faults after model loading would require mapping the configured target to the parameters or shards owned by different Workers. vLLM-FI avoids this mapping by placing weight injection in the weight-loading methods of vLLM's linear layers. At this point, the target layer and the parameter currently loaded by the Worker are directly available. Without tensor parallelism, the injector acts on the complete parameter. Under tensor parallelism (TP), it acts on the weight shard held by the current rank. Under pipeline parallelism (PP), only layers assigned to the current stage execute their weight-loading methods. Quantized parameters are handled during loading as well. Their target selection accounts for parameter names and storage representations, including packed qweight parameters.
+
+% Compute and communication faults occur during inference rather than model loading. Their injection sites are therefore placed in the forward paths of the corresponding runtime layers. For compute faults, the injector modifies the selected matrix operation's output after it is produced. For communication faults, it modifies the relevant buffer before a TP collective or PP stage transfer. These injectors run inside each Worker and operate on tensors from its current device and parallel context. The weight and compute paths select targets under TP, PP, and combined TP--PP execution. Communication injection is attached to the corresponding TP collective and PP transfer paths. Placing these sites in shared runtime layer definitions allows their reuse across supported model architectures.
+
+% Algorithm~\ref{alg:vllmfi-injection} summarizes the configuration-driven injection procedure. At each candidate site, the Worker first checks whether its local context matches the configured target. It then identifies the local tensor and samples the number of bit flips according to the exposure of that site.
+
+% \begin{algorithm}[t]
+% \caption{Configuration-driven fault injection in vLLM-FI}
+% \label{alg:vllmfi-injection}
+% \KwIn{Fault configuration $F$ with error rate $r$ and bit-flip mode $m$; inference input $X$}
+% \KwOut{Fault-affected inference output $\hat{Y}$}
+
+% Embed $F$ into \textit{VllmConfig} $C$\;
+% Propagate $C$ through Engine, Executor, Worker, and ModelRunner\;
+
+% \ForEach{candidate event $e$ reached by Worker $w$}{
+%     \If{$\neg\operatorname{Match}(F,w,e)$}{
+%         \textbf{continue}\;
+%     }
+%     \If{$e=\mathrm{WeightLoad}$}{
+%         $T \leftarrow \operatorname{LocalParameter}(w,e)$\;
+%         $S \leftarrow |T|$\;
+%     }
+%     \If{$e=\mathrm{ComputeOutput}$}{
+%         $T \leftarrow \operatorname{Output}(e)$\;
+%         $S \leftarrow N_{\mathrm{MAC}}(e)$\;
+%     }
+%     \If{$e=\mathrm{CommBuffer}$}{
+%         $T \leftarrow \operatorname{Buffer}(e)$\;
+%         $S \leftarrow N_{\mathrm{comm}}(e)$\;
+%     }
+%     $n \sim \operatorname{Poisson}\!\left(S\,b(T)\,r\right)$\;
+%     \If{$n>0$}{
+%         $T \leftarrow \operatorname{BitFlip}(T,n,m)$\;
+%     }
+% }
+% Collect the fault-affected inference output $\hat{Y}$\;
+% \end{algorithm}
+
+% Here, $\operatorname{Match}(F,w,e)$ checks the fault type, device, rank, pipeline stage, target module, and activation conditions. For quantized weights, it also checks the parameter name and storage representation. The function $b(T)$ denotes the storage bit width of tensor $T$. Depending on the injection site, $S$ is the local parameter element count, the number of multiply--accumulate operations, or the communication count.
+
+% Evaluating reliability across models, datasets, and inference configurations otherwise requires repeated implementations of dataset loading, model invocation, output processing, and task-specific metrics. To reduce this repeated work, vLLM-FI adapts \texttt{lm-evaluation-harness} to accept \textit{FaultConfig}. The modified interface passes \textit{FaultConfig} alongside the existing vLLM parameters to the vLLM backend. It constructs benchmark inputs, runs inference under the specified fault configuration, collects fault-affected outputs, and computes the native metrics of the selected downstream task. This integration connects distributed fault injection with standardized task-level reliability evaluation.
+
+
+% % \subsection{GPU-Resident In-Place Bit-Flip Operator}
+% % \label{subsec:cuda_operator}
+
+% % Existing model-level fault-injection tools for CNNs and conventional DNNs generally prioritize portable and extensible implementations based on PyTorch-level operations \cite{mahmoud2020pytorchfi,huang2024mrfi}. Their typical experiments inject only one or a small number of faults during each forward pass. Under such workloads, the additional injection overhead is limited, reducing the benefit of developing and maintaining a dedicated CUDA operator.
+
+% % This design trade-off changes for LLM fault injection. Autoregressive generation repeatedly executes model layers across decoding steps, causing runtime injection sites to be triggered many times. Moreover, vLLM-FI determines the number of fault events from the configured error rate and compute exposure. The number of faults therefore increases with the target workload and error rate. CPU-assisted bit modification repeatedly introduces host--device transfers, synchronization, and host-side bit manipulation across layers and decoding steps. As shown in Fig.~\ref{fig:controlled_injection_runtime}, the runtime difference between CPU-assisted and CUDA-based injection is relatively small at low error rates but grows rapidly as the number of injected faults increases. GPU-resident batched modification is therefore important for efficient LLM fault injection.
+
+% % To eliminate this CPU round trip, vLLM-FI implements a custom CUDA operator that modifies contiguous GPU tensors in place. Given a target tensor and the fault-injection parameters, the operator performs element selection, bit selection, mask construction, and binary modification without copying the selected values to the CPU. The operator executes on the current CUDA stream, and each launched thread processes one fault event using an independently initialized random-number-generator state. Multiple events within the same injection call can consequently be processed in parallel. 
+
+% % Let $\mathbf{X}$ denote a target tensor with data type $d$. For fault event $i$, the corresponding CUDA thread samples an element index $j_i$ and selects $k\in\{1,2\}$ bit positions from the admissible set $\mathcal{B}_{f}(d)$, where $f\in\{\mathrm{S},\mathrm{E},\mathrm{M},\mathrm{ALL}\}$ denotes the configured bit-selection policy. Let $p_{i,r}$ denote the bit position selected on draw $r$ for event $i$. The selected positions form a local mask within the target element:
+% % %
+% % \begin{equation}
+% % m_{\mathrm{local}}^{(i)}
+% % =
+% % \bigvee_{r=1}^{k}
+% % \left(1 \ll p_{i,r}\right),
+% % \qquad
+% % p_{i,r}\in\mathcal{B}_{f}(d).
+% % \label{eq:local_bit_mask}
+% % \end{equation}
+
+
+% % In two-bit mode, duplicate positions in a multi-bit field are resampled up to a bounded retry limit. Because the sign field contains only one bit, sign-field injection produces one effective bit flip even when $k=2$.
+
+% % The set $\mathcal{B}_{f}(d)$ is determined jointly by the data type and the selected field. Bit positions are numbered from the least significant bit. For FP16, the sign, exponent, and mantissa sets are $\{15\}$, $\{10,\ldots,14\}$, and $\{0,\ldots,9\}$, respectively. For BF16, the corresponding sets are $\{15\}$, $\{7,\ldots,14\}$, and $\{0,\ldots,6\}$. FP8 E5M2 uses $\{7\}$, $\{2,\ldots,6\}$, and $\{0,1\}$, whereas FP8 E4M3FN uses $\{7\}$, $\{3,\ldots,6\}$, and $\{0,1,2\}$. The \textsc{all} policy sets $\mathcal{B}_{\mathrm{ALL}}(d)=\{0,\ldots,w_d-1\}$ for a representation with storage width $w_d$. For integer representations, the same interface selects predefined sign, high-order, or low-order bit ranges.
+
+% % CUDA provides \texttt{atomicXor} for 32-bit and 64-bit integer words rather than for FP8, FP16, or BF16 values. Accordingly, vLLM-FI applies 32-bit and 64-bit faults through their same-width unsigned integer representations. For 8-bit and 16-bit data, the operator locates the aligned 32-bit integer word containing $\mathbf{X}[j_i]$ and shifts the local mask into the corresponding byte or half-word lane:
+% % %
+% % \begin{equation}
+% % m_{\mathrm{word}}^{(i)}
+% % =
+% % m_{\mathrm{local}}^{(i)}
+% % \ll
+% % \operatorname{shift}(j_i).
+% % \label{eq:word_bit_mask}
+% % \end{equation}
+
+
+% % For contiguous elements mapped into aligned 32-bit words in little-endian lane order, the shift is $8(j_i\bmod 4)$ for 8-bit data and $16(j_i\bmod 2)$ for 16-bit data. Equivalently, $\operatorname{shift}(j_i)\in\{0,8,16,24\}$ for 8-bit representations and $\operatorname{shift}(j_i)\in\{0,16\}$ for 16-bit representations. The operator then applies \texttt{atomicXor} to the aligned integer word using $m_{\mathrm{word}}^{(i)}$. This packed-word procedure modifies only the selected lane and does not require native 8-bit or 16-bit atomic XOR support. Atomic updates also prevent lost modifications when multiple threads access the same word. If the same stored bit is toggled multiple times, the final value follows XOR parity, so an even number of toggles restores the original bit.
+
+% % Full-width injection supports FP64, FP32, FP16, BF16, INT8, UINT8, INT16, INT32, INT64, FP8 E5M2, and FP8 E4M3FN. Type-specific dispatch selects the corresponding storage layout and update procedure. The same operator can therefore process full-precision weights and activations, quantized weights, and intermediate representations without converting them to a common CPU format.
+
+
+
+% % \begin{algorithm}[t]
+% % \footnotesize
+% % \DontPrintSemicolon
+% % \SetAlgoVlined
+% % \SetInd{0.35em}{0.75em}
+% % \SetAlgoNlRelativeSize{-1}
+
+% % \caption{GPU-Resident In-Place Bit-Flip Injection}
+% % \label{alg:cuda_bitflip}
+
+% % \KwIn{GPU tensor $\mathbf{X}$; fault count $N$;
+% % data type $d$; bit policy $f$; bits per event $k$;
+% % random seed $s$}
+% % \KwOut{Modified tensor $\mathbf{X}$}
+
+% % $\mathcal{B} \leftarrow \mathcal{B}_{f}(d)$\;
+
+% % \tcp{Each iteration is executed by one CUDA thread}
+% % \For{$i \leftarrow 0$ \KwTo $N-1$}{
+% %     Initialize thread-local RNG using $s$ and $i$\;
+
+% %     $j_i \leftarrow
+% %     \operatorname{RandomIndex}(|\mathbf{X}|)$\;
+
+% %     Select $k$ bit positions
+% %     $p_{i,r}\in\mathcal{B}$\;
+
+% %     Resample duplicate positions up to the retry limit\;
+
+% %     $m \leftarrow 0$\;
+
+% %     \For{$r \leftarrow 1$ \KwTo $k$}{
+% %         $m \leftarrow m \mathbin{\mathrm{OR}}
+% %         (1\ll p_{i,r})$\;
+% %     }
+
+% %     \eIf{$w_d\in\{8,16\}$}{
+% %         $q \leftarrow
+% %         \lfloor j_i/(32/w_d)\rfloor$\;
+
+% %         $\delta \leftarrow
+% %         w_d(j_i\bmod(32/w_d))$\;
+
+% %         $m \leftarrow m\ll\delta$\;
+
+% %         $\operatorname{atomicXor}_{32}
+% %         (\mathbf{X}_{32}[q],m)$\;
+% %     }{
+% %         $\operatorname{atomicXor}_{w_d}
+% %         (\mathbf{X}_{w_d}[j_i],m)$\;
+% %     }
+% % }
+% % \end{algorithm}
 
 \subsection{GPU-Resident In-Place Bit-Flip Operator}
 \label{subsec:cuda_operator}
 
-Existing model-level fault injection tools for CNNs and conventional DNNs generally prioritize portable and extensible implementations based on PyTorch-level operations \cite{mahmoud2020pytorchfi,huang2024mrfi}. Their typical experiments inject only one or a small number of faults during each forward pass. Under such workloads, the additional injection overhead is relatively limited, and the performance benefit of developing and maintaining a dedicated CUDA operator is therefore less significant.
+PyTorch-level fault-injection tools for CNNs and conventional DNNs
+emphasize portability and extensibility
+\cite{mahmoud2020pytorchfi,huang2024mrfi}. In LLM decoding, injection sites are encountered repeatedly, while the expected number of fault events grows with compute exposure and the configured error rate.These properties can increase the runtime cost of CPU-assisted tensor modification. To limit this overhead, vLLM-FI batches bit flips in a
+GPU-resident, in-place operator. We evaluate the runtime impact of this design in the subsequent experiments.
 
-This design trade-off changes for LLM fault injection. Autoregressive generation repeatedly executes model layers across multiple decoding steps, causing runtime injection sites to be triggered many times. Moreover, vLLM-FI determines the number of fault events according to the configured error rate and compute exposure, such that more faults must be processed as the target workload or error rate increases. With CPU-assisted bit modification, host--device transfers and synchronization are repeatedly introduced across model layers and decoding steps, while a larger number of faults also increases the transferred data volume and host-side bit-manipulation workload. As shown in Fig.~\ref{fig:controlled_injection_runtime}, the runtime difference between CPU-assisted and CUDA-based injection is relatively small at low error rates but grows rapidly as the error rate and the number of injected faults increase. GPU-resident batched in-place modification therefore changes from an optional optimization for conventional workloads into a practical requirement for efficient LLM fault injection.
+Algorithm~\ref{alg:cuda_bitflip} summarizes the update for a contiguous GPU tensor $\mathbf{X}$ and $N$ fault events. The packed-word path requires a 32-bit-aligned base and accessible enclosing words. The operator assigns one CUDA thread to each event on the current stream. Each thread samples an element and bit positions, constructs a mask, and atomically XORs the corresponding storage. The input tensor is modified without a CPU copy.
 
-To eliminate this CPU round trip, vLLM-FI implements a custom CUDA bit-flip operator that directly modifies target tensors residing in GPU memory. Given a target tensor and the fault injection parameters, the operator performs target-position selection, bit-mask construction, and binary-data modification on the GPU without copying the selected values to the CPU. This design confines the data manipulation introduced by fault injection to the GPU and allows multiple fault events within an injection call to be processed in parallel.
+\begin{algorithm}[t]
+\footnotesize
+\DontPrintSemicolon
+\SetAlgoVlined
+\SetInd{0.35em}{0.75em}
+\SetAlgoNlRelativeSize{-1}
 
-Moving bit flipping to the GPU also requires adapting the injection procedure to different data representations. Full-precision and quantized data types have different storage widths and encoding layouts and therefore cannot be modified using a single uniform bit-manipulation procedure. vLLM-FI implements data-type-specific bit operations for each supported representation.
+\caption{GPU In-Place Bit-Flip Injection}
+\label{alg:cuda_bitflip}
 
-For each fault event, the CUDA operator independently samples an element from the target tensor and selects one or two distinct bit positions permitted by the configured bit-selection policy. It then constructs an XOR mask from the selected positions and applies the mask to the underlying binary representation of the target element.
+\KwIn{Contiguous GPU tensor $\mathbf{X}$ with base aligned to $\max(32,w_d)$ bits and accessible enclosing words;
+fault count $N$; data type $d$ with $w_d\in\{8,16,32,64\}$;
+bit policy $f\in\{\mathrm{S},\mathrm{E},\mathrm{M},\mathrm{ALL}\}$; bits per event $k\in\{1,2\}$; random seed $s$}
+\KwOut{Modified tensor $\mathbf{X}$}
 
-The eligible bit positions are determined jointly by the tensor data type and the configured bit-selection policy. Full-width injection supports FP64, FP32, FP16, BF16, INT8, UINT8, INT16, INT32, INT64, FP8 E5M2, and FP8 E4M3FN. For FP16, BF16, and FP8 values, field-specific injection can further restrict faults to the sign, exponent, or mantissa field. Through type-specific dispatch over the underlying storage representation, the same operator can directly process full-precision weights and activations, quantized weights, and other intermediate representations without first converting them to a common CPU format.
+$\mathcal{B}\leftarrow\mathcal{B}_{f}(d)$\;
 
-% \section{vLLM-FI Framework}
-% \label{sec:framework}
+\tcp{Each iteration is executed by one CUDA thread}
+\For{$i\leftarrow 0$ \KwTo $N-1$}{
+    Initialize thread-local RNG using $s$ and $i$\;
+    $j_i\leftarrow\operatorname{RandomIndex}(|\mathbf{X}|)$\;
+    Select $k$ bit positions $p_{i,r}\in\mathcal{B}$\;
 
-% This section presents the design and implementation of vLLM-FI. It focuses on how the tool performs configurable fault injection on the native vLLM execution path. We first describe the constraints imposed by the multi-process runtime and the overall architecture. The remaining subsections present fault models, cross-process configuration propagation, runtime target selection, GPU-resident bit flipping, and automated reliability evaluation.
+    \If{$k=2$ and $|\mathcal{B}|>1$}{
+        Resample duplicate positions up to the retry limit\;
+    }
 
-% \subsection{Design Goals and System Architecture}
-% \label{subsec:architecture}
+    $m\leftarrow 0$\;
+    \For{$r\leftarrow 1$ \KwTo $k$}{
+        $m\leftarrow m\mathbin{\mathrm{OR}}(1\ll p_{i,r})$\;
+    }
 
-% vLLM improves inference throughput and GPU memory utilization through continuous batching, PagedAttention-based KV-cache management, optimized computation kernels, and distributed parallel execution \cite{kwon2023efficient}. However, the runtime architecture supporting these optimizations complicates conventional hook-based fault injection. Unlike a typical PyTorch program, which stores the model object in a single process, vLLM executes models in Worker processes launched by a scheduling process. Consequently, model instances and layer objects reside inside the Workers and are not directly accessible from the entry process. External forward hooks therefore cannot reliably locate or modify a target layer. Distributed execution further partitions parameters and intermediate results across ranks. vLLM-FI must therefore propagate fault configurations across process boundaries and perform injection inside the appropriate Worker at the correct rank and runtime location.
+    \eIf{$w_d\in\{8,16\}$}{
+        $q\leftarrow\lfloor j_i/(32/w_d)\rfloor$\;
+        $\delta\leftarrow w_d(j_i\bmod(32/w_d))$\;
+        $\operatorname{atomicXor}_{32}
+        (\mathbf{X}_{32}[q],m\ll\delta)$\;
+    }{
+        $\operatorname{atomicXor}_{w_d}
+        (\mathbf{X}_{w_d}[j_i],m)$\;
+    }
+}
+\end{algorithm}
 
-% vLLM-FI addresses these constraints through a configuration-driven injection path integrated into the native vLLM runtime. For each experiment, the system receives a set of inference requests, a vLLM execution configuration, and a \textit{Fault Config}. The vLLM execution configuration specifies the model, quantization method, parallel configuration, and inference parameters, whereas the \textit{Fault Config} specifies the fault type, injection target, and injection strength. During execution, the fault configuration is propagated to the Workers, where vLLM-FI applies controlled perturbations to selected model weights, operator outputs, or communication buffers. The resulting inference outputs retain the format expected by downstream task evaluators.
+Bit positions are numbered from the least significant bit, and $\mathcal{B}_{\mathrm{ALL}}(d)=\{0,\ldots,w_d-1\}$. For FP16, the sign, exponent, and mantissa occupy bits $\{15\}$, $\{10,\ldots,14\}$, and $\{0,\ldots,9\}$; for BF16, they occupy $\{15\}$, $\{7,\ldots,14\}$, and $\{0,\ldots,6\}$. The corresponding sets are $\{7\}$, $\{2,\ldots,6\}$, and $\{0,1\}$ for FP8 E5M2, and $\{7\}$, $\{3,\ldots,6\}$, and $\{0,1,2\}$ for FP8 E4M3FN. For integer types, the policies select the most significant bit or predefined high- and low-order ranges. In two-bit mode, a sign-only selection yields one effective flip; a duplicate remaining after the bounded retries does likewise.
 
-% Three goals guide this architecture: configuration simplicity, efficient injection, and precise runtime targeting. First, vLLM-FI manages the \textit{Fault Config} together with the native vLLM execution parameters and automatically handles its propagation across processes. Second, it modifies GPU-resident target tensors in place, avoiding CPU copies and host--device transfers introduced solely by fault injection. Third, it resolves injection targets using the runtime representations and execution locations employed by vLLM, including quantized tensors, fused operators, and rank-local data. These extensions do not alter model partitioning, Worker launch, device placement, or scheduling, which remain under the control of vLLM.
+The unsigned views $\mathbf{X}_{32}$ and $\mathbf{X}_{w_d}$ in Algorithm~\ref{alg:cuda_bitflip} refer to the same tensor storage. CUDA provides atomic XOR for 32-bit and 64-bit words, so the operator places 8-bit and 16-bit masks in their enclosing 32-bit word. This packed-word mapping assumes a 32-bit-aligned base, accessible enclosing words, and little-endian lane order. The shifted mask changes only the selected lane, while atomic updates preserve concurrent toggles to the same word. Repeated toggles of one bit follow XOR parity: an even number restores its original value.
 
-% \begin{figure*}[t]
-%     \centering
-%     \includegraphics[width=0.82\textwidth]{vLLMFI.pdf}
-%     \caption{\textbf{Overview of the vLLM-FI architecture and execution workflow.}
-%     vLLM schedules inference requests from the evaluation dataset, while Fault Config is integrated with the native configuration and propagated to the Workers. Worker-side injectors perturb selected GPU-resident tensors during inference, and \texttt{lm-evaluation} evaluates the resulting outputs.}
-%     \label{fig:vllmfi_architecture}
-% \end{figure*}
-
-% Figure~\ref{fig:vllmfi_architecture} illustrates the configuration-driven architecture and execution workflow of vLLM-FI. The evaluation dataset and Fault Config are provided as system inputs, while vLLM schedules the inference requests generated from the dataset. Fault Config is integrated with the native vLLM execution configuration to form a unified runtime configuration, which is then propagated to the Workers through the Executor. During model inference, each Worker activates the appropriate fault injector according to the fault type, injection target, and injection strength specified in Fault Config. The fault-affected model outputs are subsequently returned to lm-evaluation, which evaluates the injection results using the task-specific metrics associated with the dataset.
-
-% \subsection{Fault Models and Injection-Strength Modeling}
-% \label{subsec:fault_models}
-
-% vLLM-FI defines memory, compute, and communication faults on model weights, operator results, and communication buffers. The framework supports fixed-count and bit error rate modes.Fixed-count mode specifies the number of fault events. BER mode derives the Poisson parameter $\lambda$ from the exposure of the target object. The following subsections define the exposure and event count for each fault model.
-
-% \begin{figure*}[t]
-%     \centering
-%     \subfloat[Memory fault during weight loading.\label{fig:fault_memory}]{\includegraphics[width=0.30\textwidth]{memory_error.drawio.pdf}}
-%     \hfill
-%     \subfloat[Compute fault in an operator result.\label{fig:fault_compute}]{\includegraphics[width=0.30\textwidth]{compute_error.drawio.pdf}}
-%     \hfill
-%     \subfloat[Communication fault before a collective.\label{fig:fault_comm}]{\includegraphics[width=0.30\textwidth]{communication_error_v2.drawio.pdf}}
-%     \caption{Model-visible fault abstractions in vLLM-FI. A weight perturbation persists after loading. A compute perturbation changes an intermediate result. A communication perturbation is applied to a local buffer before collective communication and may propagate through data exchange or aggregation.}
-%     \label{fig:three_fault_models}
-% \end{figure*}
-
-% \subsubsection{Memory Faults}
-
-% Memory faults model weight corruption during storage or loading. Error-correcting code can detect or correct many single-bit errors. Uncorrectable multi-bit errors may still cause silent data corruption \cite{hsiao2023silent,papadimitriou2021demystifying,jiao2025large}. vLLM-FI injects random double-bit flips while weights enter the GPU execution path. A modified weight remains corrupted during subsequent forward computations and autoregressive decoding.
-
-% For a weight tensor $\mathbf{W}$ with $|\mathbf{W}|$ elements and a storage width of $b$ bits per element, let $\rho_{\mathrm{mem}}$ be the fault-event rate per stored bit. The fault count is
-% \begin{equation}
-%     \lambda_{\mathrm{mem}}=|\mathbf{W}|b\rho_{\mathrm{mem}},
-%     \qquad
-%     N_{\mathrm{faults}}^{\mathrm{mem}}
-%     \sim \operatorname{Poisson}(\lambda_{\mathrm{mem}}).
-%     \label{eq:memory_exposure}
-% \end{equation}
-
-% \subsubsection{Compute Faults}
-
-% Compute faults model the effect of transient errors in arithmetic units on intermediate results \cite{ashraf2015understanding}. Following prior LLM reliability studies \cite{sun2025demystifying,sun2025ft2,xie2025realm}, vLLM-FI maps them to bit perturbations in GEMM and related matrix-computation outputs.
-
-% Compute exposure is defined by the multiply--accumulate (MAC) workload represented by the target operators. Let $\mathcal{C}_{\mathrm{total}}$ be the estimated MAC count and $b_{\mathrm{inj}}$ the data width at the injection point. The bit-level compute exposure and expected event count are
-% \begin{equation}
-%     \mathcal{E}_{\mathrm{comp}}=\mathcal{C}_{\mathrm{total}}b_{\mathrm{inj}},
-%     \qquad
-%     \lambda_{\mathrm{comp}}=\rho_{\mathrm{comp}}\mathcal{E}_{\mathrm{comp}},
-%     \label{eq:compute_exposure}
-% \end{equation}
-% \begin{equation}
-%     N_{\mathrm{faults}}^{\mathrm{comp}}
-%     \sim \operatorname{Poisson}(\lambda_{\mathrm{comp}}).
-%     \label{eq:compute_poisson}
-% \end{equation}
-
-% Algorithm~\ref{alg:mac_estimation} summarizes the runtime MAC estimate. Linear projections use their executed input and output dimensions. Fused modules, such as \texttt{gate\_up\_proj}, use the dimensions of the fused runtime operator. Attention uses sequence metadata supplied by vLLM to distinguish prefill from decode. The current estimate excludes non-MAC operations, including Softmax, normalization, rotary position encoding, and data movement.
-
-% % This algorithm is intentionally single-column.
-% \begin{algorithm}[t]
-% \footnotesize
-% \DontPrintSemicolon
-% \SetAlgoVlined
-% \SetInd{0.35em}{0.75em}
-% \SetAlgoNlRelativeSize{-1}
-% \caption{Runtime MAC Estimation}
-% \label{alg:mac_estimation}
-% \KwIn{Projection shapes $\mathcal{P}$; query offsets $\mathbf{s}$; context lengths $\boldsymbol{\ell}$; query-head count $N_q$; head dimension $D_h$}
-% \KwOut{Estimated MAC count $\mathcal{C}_{\mathrm{total}}$}
-% $\mathcal{C}_{\mathrm{proj}} \leftarrow 0$;
-% \ForEach{$(N,D_{\mathrm{in}},D_{\mathrm{out}}) \in \mathcal{P}$}{
-%     $\mathcal{C}_{\mathrm{proj}} \leftarrow \mathcal{C}_{\mathrm{proj}}+ND_{\mathrm{in}}D_{\mathrm{out}}$;
-% }
-% $\mathcal{C}_{\mathrm{attn}} \leftarrow 0$;
-% \For{$i \leftarrow 0$ \KwTo $|\boldsymbol{\ell}|-1$}{
-%     $L_q \leftarrow \mathbf{s}[i+1]-\mathbf{s}[i]$;
-%     $L_{\mathrm{kv}} \leftarrow \boldsymbol{\ell}[i]$;
-%     \eIf{$L_q>1$}{
-%         $N_{\mathrm{eff}} \leftarrow L_q\left(L_{\mathrm{kv}}-\frac{L_q-1}{2}\right)$;
-%     }{
-%         $N_{\mathrm{eff}} \leftarrow L_qL_{\mathrm{kv}}$;
-%     }
-%     $\mathcal{C}_{\mathrm{attn}} \leftarrow \mathcal{C}_{\mathrm{attn}}+2N_qN_{\mathrm{eff}}D_h$;
-% }
-% $\mathcal{C}_{\mathrm{total}} \leftarrow \mathcal{C}_{\mathrm{proj}}+\mathcal{C}_{\mathrm{attn}}$;
-% \Return{$\mathcal{C}_{\mathrm{total}}$};
-% \end{algorithm}
-
-% \subsubsection{Communication Faults}
-
-% Communication faults model errors during data exchange in multi-device inference. vLLM-FI flips bits in a local communication buffer before a collective call. Corrupted data then participates in operations such as All-Reduce and may propagate to other ranks.
-
-% Communication exposure is derived from the transferred data volume. Consider a Ring All-Reduce with tensor-parallel size $P$ and a communication tensor containing $N_{\mathrm{elem}}$ elements. Its Reduce-Scatter and All-Gather phases produce the following per-rank element volume:
-% \begin{equation}
-%     V_{\mathrm{comm}}=\frac{2(P-1)}{P}N_{\mathrm{elem}}.
-%     \label{eq:comm_volume}
-% \end{equation}
-% For a communication width of $b$ bits and a target rate $\rho_{\mathrm{comm}}$, vLLM-FI samples
-% \begin{equation}
-%     \lambda_{\mathrm{comm}}=V_{\mathrm{comm}}b\rho_{\mathrm{comm}},
-%     \qquad
-%     N_{\mathrm{faults}}^{\mathrm{comm}}
-%     \sim \operatorname{Poisson}(\lambda_{\mathrm{comm}}).
-%     \label{eq:comm_exposure}
-% \end{equation}
-% This model separates communication-path exposure from an equal-sized local tensor perturbation. It captures the software-visible buffer corruption. Link protocols, retransmission, and internal interconnect behavior remain outside its scope.
-
-% \subsection{Configuration-Driven Runtime Injection}
-% \label{subsec:runtime_injection}
-
-% Fault Config extends the native vLLM execution configuration with controlled fault-injection metadata. It records the fault type, fault mode, target rank, injection strength and random seed. The evaluation dataset and Fault Config are provided to vLLM-FI as system inputs. vLLM schedules the inference requests derived from the dataset, while vLLM-FI integrates Fault Config with the native execution settings to form a unified runtime configuration. The Executor then propagates this configuration to the Workers.
-
-% Within each Worker, vLLM-FI registers candidate injection sites along the weight-loading, operator-computation, and collective-communication paths. At each candidate site, the Worker checks the current module, execution stage, and local rank against Fault Config. When all conditions match, the Worker passes the target tensor and injection parameters to the custom CUDA bit-flip operator, which modifies the selected GPU-resident tensor in place.
-
-% Rank selection supports a single rank, a list of ranks, or all ranks. Each Worker compares its local rank with the configured target set. Single-rank mode enables injection only in the selected Worker, while multi-rank mode enables injection in the listed Workers. All-rank mode permits injection in every Worker that satisfies the configured module and execution-stage conditions.
-
-% The mechanism operates within the native parallel context created by vLLM and does not alter model partitioning, device placement, or scheduling. Under tensor parallelism, a matching Worker modifies the local parameter shard, intermediate tensor, or communication buffer that it owns. Under pipeline parallelism, injection is activated only in the stage that executes the target layer and satisfies the rank condition.
-
-% For communication faults, the injection scope covers all inter-GPU communication sites, including collective communication within tensor-parallel layers and activation transfers at pipeline-stage boundaries. Within each communicated tensor, fault locations are sampled according to the configured bit error rate. After inference, the fault-affected outputs are returned to \texttt{lm-evaluation} for task-specific evaluation.
-% \subsection{GPU-Resident In-Place Bit-Flip Operator}
-% \label{subsec:cuda_operator}
-
-% vLLM-FI uses a custom CUDA operator to modify selected GPU-resident tensors in place. The operator receives a tensor pointer and the injection parameters, and directly modifies the underlying binary storage without creating a CPU copy.
-
-% For each fault event, the operator samples a tensor element and selects one or two distinct bit positions permitted by the configured policy. It constructs an XOR mask from the selected positions and applies the mask to the stored binary representation of the element. The eligible bit positions are determined by the tensor data type and the bit-selection policy. Full-width mode supports FP64, FP32, FP16, BF16, INT8, UINT8, INT16, INT32, INT64 , FP8 E5M2 and FP8 E4M3FN. Field-specific mode restricts faults in FP16, BF16, and FP8 values to the sign, exponent, or mantissa fields.
-
-% Updates are performed using atomic XOR operations. For 32-bit and 64-bit storage words, the operator applies the mask directly to the corresponding word. Since CUDA does not provide native atomic XOR operations for 8-bit or 16-bit values, vLLM-FI maps each target value to its enclosing aligned 32-bit word. It then shifts the mask according to the byte or half-word offset and performs a 32-bit atomic XOR operation. This procedure preserves the remaining bits in the storage word and prevents lost updates when multiple threads concurrently access the same word.
-% The kernel assigns scheduled fault events to CUDA threads. The element and bit positions for each event are determined by a base random seed and the thread index. The kernel executes on the caller-provided CUDA stream without introducing explicit device-wide synchronization. Identical configurations, random seeds, and execution conditions reproduce the same injection positions. Section 5 evaluates the end-to-end runtime overhead.
-
-% \subsection{Automated End-to-End Reliability Evaluation}
-% \label{subsec:evaluation_loop}
-
-% Fault injection produces perturbed outputs. A complete reliability study must also load tasks, construct inputs, run inference, score outputs, and aggregate results. Separate scripts for these steps increase the effort required to add a task or fault configuration. vLLM-FI integrates with \texttt{lm-evaluation-harness} to expose one evaluation workflow.
-
-% Users select the model, downstream task, vLLM settings, and Fault Config through a common command-line entry. The system initializes the model, propagates the fault configuration, triggers runtime injection, collects outputs, and invokes the task evaluator. Changing the fault model, target, or task requires configuration changes rather than new model-loading, trigger, or scoring code.
-
-% The task evaluator first produces the native benchmark metric. The result-processing stage aggregates repeated runs and computes normalized values against a fault-free baseline. This configuration-driven loop simplifies batch experiments and records the information required for reproduction. Section~\ref{sec:experimental_setup} defines the common workloads and evaluation protocol.
+Type-specific dispatch supports FP64, FP32, FP16, BF16, INT8, UINT8, INT16, INT32, INT64, FP8 E5M2, and FP8 E4M3FN.

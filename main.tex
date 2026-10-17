@@ -16,41 +16,57 @@
 \usepackage[linesnumbered,ruled,vlined]{algorithm2e}
 \usepackage[most]{tcolorbox}
 \usepackage{tabularx}
+\usepackage{listings}
+\flushbottom
 
-\newtcolorbox{observationbox}[1]{
-    colback=gray!4,
+\setlength{\textfloatsep}{8pt}
+\setlength{\floatsep}{8pt}
+\setlength{\intextsep}{8pt}
+\setlength{\parskip}{0pt}
+
+
+
+\newtcolorbox{observationbox}[1]{%
+    enhanced,
+    breakable,
+    colback=black!4,
     colframe=black!55,
-    boxrule=0.6pt,
-    arc=1.5pt,
-    left=5pt,
-    right=5pt,
-    top=4pt,
-    bottom=4pt,
-    title=\textbf{#1},
-    fonttitle=\normalsize,
-    coltitle=black,
-    colbacktitle=gray!18
+    boxrule=0.45pt,
+    arc=0pt,
+    boxsep=0pt,
+    left=10pt,
+    right=10pt,
+    top=6pt,
+    bottom=6pt,
+    before skip=8pt,
+    after skip=8pt,
+    fontupper=\normalfont,
+    before upper={%
+    \noindent
+    \textbf{\mbox{Observation\hspace{0.3em}\##1:}}%
+    \hspace{0.5em}\ignorespaces
 }
-
+}
 \newenvironment{observation}[1][Observation]
 {\begin{observationbox}{#1}}
 {\end{observationbox}}
 
 
 
-
 \title{vLLM-FI: A Fault Injection Framework for Reliability Evaluation of LLM Inference}
-\author{Jie~Ren,
+
+\author{
+Jie~Ren,
 Zizhen~Liu,~\IEEEmembership{Member,~IEEE,}
-Songwei~Pei,~\IEEEmembership{Member,~IEEE,}
 Cheng~Liu,~\IEEEmembership{Senior~Member,~IEEE,}
 Huawei~Li,~\IEEEmembership{Senior~Member,~IEEE,}
-and Shangguang~Wang,~\IEEEmembership{Senior~Member,~IEEE}%
-\thanks{Jie Ren, Songwei Pei, and Shangguang Wang are with Beijing University of Posts and Telecommunications, Beijing, China.}%
-\thanks{Zizhen Liu and Huawei Li are with the Institute of Computing Technology, Chinese Academy of Sciences, Beijing, China.}%
-\thanks{Cheng Liu is with North China Electric Power University, China.}%
-\thanks{Corresponding authors: Songwei Pei and Cheng Liu.}}
+Shangguang~Wang,~\IEEEmembership{Senior~Member,~IEEE,}
+and~Songwei~Pei,~\IEEEmembership{Member,~IEEE}
 
+\thanks{This paper was supported in part by the Shandong Provincial Natural Science Foundation (ZR2024LZH010) and the Science and Technology Innovation Program of Xiongan New Area (2024XAGG0002).
+
+Jie Ren, Songwei Pei, and Shangguang Wang are with the School of Computer Science (National Pilot Software Engineering School), Beijing University of Posts and Telecommunications, Beijing 100876, China. Zizhen Liu and Huawei Li are with the State Key Lab of Processors, Institute of Computing Technology, Chinese Academy of Sciences, Beijing 100190, China. Cheng Liu is with the School of Control and Computer Engineering, North China Electric Power University, Beijing 102206, China (e-mail: renjie2024@bupt.edu.cn, liuzizhen@ict.ac.cn, liucheng@ncepu.edu.cn, lihuawei@ict.ac.cn, sg-wang@bupt.edu.cn, peisongwei@bupt.edu.cn), (corresponding authors: Cheng Liu and Songwei Pei).}
+}
 
 \begin{document}
 \markboth{IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems}%
