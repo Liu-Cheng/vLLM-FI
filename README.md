@@ -1,6 +1,6 @@
 # vLLM-FI
 
-LaTeX source for **vLLM-FI: A Fault Injection Framework for Reliability Evaluation of LLM Inference**, a manuscript being prepared for submission to *IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems (TCAD)*.
+LaTeX source for **vLLM-FI: A vLLM-Based Fault Injection Framework for LLM Reliability Evaluation**, a manuscript being prepared for submission to *IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems (TCAD)*.
 
 **Authors:** Jie Ren, Zizhen Liu, Songwei Pei, Cheng Liu, Huawei Li, and Shangguang Wang.
 **Corresponding authors:** Songwei Pei and Cheng Liu.
